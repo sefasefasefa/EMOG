@@ -1,0 +1,242 @@
+{% extends 'agent_app/base.html' %}
+
+{% block content %}
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <div class="tabs">
+          <button class="tab active" data-tab="chat">Sohbet ve Çalıştır</button>
+          <button class="tab" data-tab="integrations">Entegrasyonlar</button>
+        </div>
+
+        <div id="tab-chat" class="tab-content">
+          <div class="chat-window" id="chat-window" aria-live="polite"></div>
+           <div class="queue-panel">
+             <div class="queue-panel__header">
+               <h4>Bekleyen görevler</h4>
+               <span id="queue-count" class="small">0 görev</span>
+             </div>
+             <div id="task-queue" class="queue-panel__list">Kuyruk boş</div>
+           </div>
+          <div class="input-row">
+            <textarea id="chat-input" rows="2" placeholder="Ne yapmak istediğinizi yazın... Örn: “1-100 arasındaki asal sayıları bul ve çalıştır” veya “Django nedir?”"></textarea>
+            <button class="primary" id="chat-send">Gönder</button>
+          </div>
+          <div id="live-logs-wrapper" style="display:none;margin-top:12px">
+            <div class="chat-window" id="live-logs"></div>
+          </div>
+        </div>
+
+        <div id="tab-integrations" class="tab-content" style="display:none; margin-top:12px">
+          <div class="integration-row" style="display:flex;gap:12px;align-items:center">
+            <div style="flex:1;min-width:0">
+              <h4 style="margin:0">GitHub</h4>
+              <p class="small" style="margin:6px 0 0">Repo oluşturma ve push işlemleri için entegrasyon sayfasını kullanın.</p>
+            </div>
+            <div><a href="{% url 'github_page' %}"><button class="primary">Aç</button></a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // simple tabs
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const t = b.getAttribute('data-tab');
+    document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+    document.getElementById('tab-'+t).style.display = 'block';
+  }));
+
+  // chat helpers (render simple bubbles)
+  function renderBubble(text, who){
+    const win = document.getElementById('chat-window');
+    const row = document.createElement('div');
+    const bubble = document.createElement('div'); bubble.className = 'bubble ' + (who==='me' ? 'me' : 'ai');
+    bubble.textContent = text;
+    row.appendChild(bubble); win.appendChild(row); win.scrollTop = win.scrollHeight;
+    return row;
+  }
+
+  function appendRunStatus(row){
+    const panel = document.createElement('div');
+    panel.className = 'status-panel';
+    panel.setAttribute('aria-live', 'polite');
+    panel.innerHTML = '<div class="status-panel__label">Durum</div><div class="status-panel__value">Durum: boş</div><div class="small">Henüz kontrol edilmedi.</div>';
+    row.appendChild(panel);
+    const statusEl = panel.querySelector('.status-panel__value');
+    const resultEl = panel.querySelector('.small');
+    document.getElementById('chat-window').scrollTop = document.getElementById('chat-window').scrollHeight;
+    return { statusEl, resultEl };
+  }
+
+  // safe JSON parser: if server returns HTML or plain text, throw with snippet
+  async function safeJson(resp){
+    try{
+      const ct = resp.headers.get('content-type') || '';
+      if(ct.includes('application/json')) return await resp.json();
+      const txt = await resp.text();
+      throw new Error('Non-JSON response:\n'+txt.slice(0,1200));
+    }catch(e){ throw e; }
+  }
+
+  // CSRF & header helpers
+  function getCookie(name){
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
+  function buildHeaders(extra){
+    const headers = Object.assign({}, extra || {});
+    try{
+      const admin = (window.getAdminToken && window.getAdminToken()) || localStorage.getItem('emog_admin_token') || '';
+      if(admin) headers['X-ADMIN-TOKEN'] = admin;
+    }catch(e){}
+    const csr = getCookie('csrftoken') || getCookie('csrfmiddlewaretoken');
+    if(csr) headers['X-CSRFToken'] = csr;
+    return headers;
+  }
+
+  // start an EventSource for a run and update status + optional live logs
+  function startRunStream(run_id, opts){
+    opts = opts || {};
+    const showLogs = opts.showLogs !== false; // default true
+    const statusEl = opts.statusEl || document.getElementById('run-status');
+    if(statusEl) statusEl.textContent = 'Çalıştırılıyor — ' + run_id + ' ⏳';
+    if(showLogs){ document.getElementById('live-logs-wrapper').style.display='block'; const dest = document.getElementById('live-logs'); if(dest) dest.innerHTML=''; }
+    try{
+      const es = new EventSource('{% url "task_stream" "__RUNID__" %}'.replace('__RUNID__', run_id));
+      es.onmessage = function(evt){
+        try{
+          const d = JSON.parse(evt.data);
+          // ignore server heartbeat messages
+          if(d && d.type === 'heartbeat') return;
+          const latest = (d.type?('['+d.type+'] '):'') + (d.text||'');
+          if(statusEl) statusEl.textContent = latest;
+          if(showLogs){ const dest = document.getElementById('live-logs'); const div=document.createElement('div'); div.className='bubble ai'; div.textContent = latest; dest.appendChild(div); dest.scrollTop = dest.scrollHeight; }
+          // heuristics to detect completion
+          const t = (d.type||'').toLowerCase(); const txt = (d.text||'').toLowerCase();
+          if(t==='done' || txt.includes('process completed') || txt.includes('completed') || txt.includes('finished') || txt.includes('exit') || (txt.includes('error') && txt.includes('exit'))){ if(statusEl) statusEl.textContent = 'Tamamlandı — ' + run_id; try{ es.close(); }catch(e){} }
+        }catch(e){ }
+      };
+      es.onerror = function(e){ if(statusEl) statusEl.textContent = 'Bağlantı kapandı — ' + run_id; try{ es.close(); }catch(e){} };
+      return es;
+    }catch(e){ if(statusEl) statusEl.textContent = 'Hata başlatılamadı: '+String(e); }
+  }
+
+  async function sendAssistantMessage(){
+    const input = document.getElementById('chat-input');
+    const button = document.getElementById('chat-send');
+    const txt = input.value.trim();
+    if(!txt || button.disabled) return;
+    renderBubble(txt,'me');
+    input.value = '';
+    button.disabled = true;
+    button.textContent = 'Anlıyor...';
+    const body = new URLSearchParams();
+    body.append('message', txt);
+    try{
+      const resp = await fetch('{% url "assistant_message" %}', {method:'POST', body: body, headers: buildHeaders()});
+      let j;
+      try{ j = await safeJson(resp); }catch(e){ renderBubble('Sunucu hata: '+e.message,'ai'); return; }
+      if(j && j.ok){
+         let assistantRow = null;
+         if(j.reply) assistantRow = renderBubble(j.reply, 'ai');
+         if(j.intent === 'execute' && j.run_id) {
+           if(!assistantRow) assistantRow = renderBubble('Çalıştırma başlatıldı.', 'ai');
+           const status = appendRunStatus(assistantRow);
+           startRunStream(j.run_id, {showLogs:true, statusEl: status.statusEl});
+           refreshTasks();
+         }
+        if(j.intent === 'health' || j.intent === 'models') renderBubble(JSON.stringify(j.data || j, null, 2), 'ai');
+      } else {
+        renderBubble((j && (j.error || j.detail)) || 'İstek işlenemedi.', 'ai');
+      }
+    }catch(e){
+      renderBubble('Hata: '+String(e), 'ai');
+    }finally{
+      button.disabled = false;
+      button.textContent = 'Gönder';
+      input.focus();
+    }
+  }
+
+  document.getElementById('chat-send').addEventListener('click', sendAssistantMessage);
+  document.getElementById('chat-input').addEventListener('keydown', function(ev){
+    if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); sendAssistantMessage(); }
+  });
+
+  // Settings: fetch and save (guarded - settings UI may be absent)
+  (function(){
+    const saveBtn = document.getElementById('save-settings');
+    if(!saveBtn) return;
+    async function fetchSettings(){ try{ const resp = await fetch('{% url "omni_models" %}'); let j; try{ j = await safeJson(resp); }catch(e){ return; } const elem = document.getElementById('omni_model'); if(elem) elem.value = '{{ default_model }}'; }catch(e){} }
+    fetchSettings();
+    saveBtn.addEventListener('click', async ()=>{
+      const baseEl = document.getElementById('omni_base'); const keyEl = document.getElementById('omni_key'); const modelEl = document.getElementById('omni_model');
+      const base = baseEl ? baseEl.value.trim() : ''; const key = keyEl ? keyEl.value.trim() : ''; const model = modelEl ? modelEl.value.trim() : '';
+      const body = new URLSearchParams(); body.append('OMNIROUTE_BASE_URL', base); body.append('OMNIROUTE_API_KEY', key); body.append('OMNIROUTE_DEFAULT_MODEL', model);
+      const dest = document.getElementById('settings-out'); if(dest) dest.textContent = 'Kaydediliyor...';
+      try{ const hdrs = (window.getAdminToken && window.getAdminToken()) ? {'X-ADMIN-TOKEN': window.getAdminToken()} : {}; const resp = await fetch('{% url "save_settings" %}', {method:'POST', body: body, headers: hdrs}); let j; try{ j = await safeJson(resp); }catch(e){ if(dest) dest.textContent = 'Sunucu hata: '+e.message; return; } if(dest) dest.textContent = JSON.stringify(j); }catch(e){ if(dest) dest.textContent = 'Hata: '+e; }
+    });
+  })();
+
+  // poll queue and update UI
+  async function pollQueue(){
+    try{
+      const resp = await fetch('{% url "queue_list" %}'); const j = await resp.json();
+      const el = document.getElementById('task-queue'); if(!el) return;
+      if(!j.ok){ el.textContent = 'Kuyruk alınamadı'; return; }
+      const items = j.queue || [];
+      const count = document.getElementById('queue-count');
+      if(count) count.textContent = items.length + ' görev';
+      if(items.length === 0){ el.textContent = 'Kuyruk boş'; return; }
+      el.innerHTML = '';
+      items.forEach((it, idx)=>{
+        const div = document.createElement('div'); div.style.padding='6px'; div.style.borderBottom='1px solid #112'; div.textContent = `${idx+1}. ${it.run_id} — ${it.enqueued_at||''}`; el.appendChild(div);
+      });
+    }catch(e){ /* ignore */ }
+  }
+  setInterval(pollQueue, 2500);
+  pollQueue();
+
+  function escapeHtml(value){
+    return String(value ?? '').replace(/[&<>"']/g, function(ch){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch];
+    });
+  }
+
+  const statusLabels = {queued:'Bekliyor', running:'Çalışıyor', completed:'Tamamlandı', failed:'Başarısız'};
+  const priorityLabels = {urgent:'Acil', high:'Yüksek', medium:'Orta', low:'Düşük'};
+  function taskBadge(value, labels){
+    const key = String(value || 'medium').toLowerCase();
+    return '<span class="badge badge--'+escapeHtml(key)+'">'+escapeHtml(labels[key] || value || '-')+'</span>';
+  }
+  function renderTaskList(tasks){
+    const list = document.getElementById('task-list');
+    if(!list) return;
+    if(!tasks.length){ list.innerHTML = '<div class="empty-state">Henüz görev yok. Bir görev yazarak başlayın.</div>'; return; }
+    list.innerHTML = tasks.slice(0, 12).map(function(task, index){
+      const title = task.title || task.task || 'Başlıksız görev';
+      const date = task.enqueued_at ? new Date(task.enqueued_at).toLocaleString('tr-TR', {dateStyle:'short', timeStyle:'short'}) : '';
+      return '<div class="task-item"><div class="task-item__number">'+(index+1)+'</div><div class="task-item__body"><div class="task-item__title">'+escapeHtml(title)+'</div><div class="task-item__meta">'+taskBadge(task.status, statusLabels)+taskBadge(task.priority, priorityLabels)+'<span>'+escapeHtml(date)+'</span></div></div></div>';
+    }).join('');
+  }
+  async function refreshTasks(){
+    try{
+      const resp = await fetch('{% url "tasks_list" %}');
+      const data = await safeJson(resp);
+      if(data.ok) renderTaskList(data.tasks || []);
+    }catch(e){
+      const list = document.getElementById('task-list');
+      if(list) list.innerHTML = '<div class="empty-state">Görevler yüklenemedi.</div>';
+    }
+  }
+  refreshTasks();
+  setInterval(refreshTasks, 2500);
+
+</script>
+{% endblock %}
