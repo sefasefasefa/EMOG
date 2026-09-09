@@ -92,7 +92,6 @@
        .site-nav.is-open{display:flex}
        .site-nav a{padding:9px 4px}
        .site-nav > span{display:flex;gap:6px;margin-left:0!important;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)}
-       #admin-token-input{width:100%!important;min-width:0}
      }
      @media (max-width:560px){
        .panel{padding:12px;border-radius:10px}
@@ -119,10 +118,6 @@
           <a href="{% url 'runs_page' %}">Çalıştırmalar</a>
           <a href="/github/">Entegrasyonlar</a>
           <a href="{% url 'omni_logs' %}">Omni Logs</a>
-          <span style="margin-left:14px">
-            <input id="admin-token-input" placeholder="Admin token" style="padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);width:180px;background:transparent;color:var(--muted);font-size:13px" />
-            <button id="admin-token-save" style="margin-left:6px;padding:6px 8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);cursor:pointer">Kaydet</button>
-          </span>
         </nav>
     </header>
 
@@ -148,17 +143,6 @@
       });
     })();
 
-    // Admin token helpers: persist in localStorage and expose getter
-    (function(){
-      const key = 'emog_admin_token';
-      const input = document.getElementById('admin-token-input');
-      const btn = document.getElementById('admin-token-save');
-      function load(){ try{ const v = localStorage.getItem(key) || ''; if(input) input.value = v; }catch(e){} }
-      function save(){ try{ const v = (input && input.value) ? input.value.trim() : ''; localStorage.setItem(key, v); if(v){ btn.textContent = 'Kaydedildi'; setTimeout(()=>btn.textContent='Kaydet',1200);} }catch(e){} }
-      window.getAdminToken = function(){ try{ return localStorage.getItem(key) || ''; }catch(e){ return ''; } }
-      if(btn){ btn.addEventListener('click', save); }
-      load();
-    })();
   </script>
 </body>
 </html>

@@ -70,8 +70,7 @@
   const reposUrl = '{% url "github_repositories" %}';
   const createUrl = '{% url "create_github_repo" %}';
   const $ = (id) => document.getElementById(id);
-  function adminToken(){ try{return (window.getAdminToken && window.getAdminToken()) || localStorage.getItem('emog_admin_token') || '';}catch(e){return '';} }
-  function headers(){ const h={'X-Requested-With':'XMLHttpRequest'}; const t=adminToken(); if(t) h['X-ADMIN-TOKEN']=t; const c=document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); if(c) h['X-CSRFToken']=c.pop(); return h; }
+  function headers(){ const h={'X-Requested-With':'XMLHttpRequest'}; const c=document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)'); if(c) h['X-CSRFToken']=c.pop(); return h; }
   async function json(url, options={}){ const r=await fetch(url,{...options,headers:{...headers(),...(options.headers||{})}}); let data; try{data=await r.json();}catch(e){throw new Error('Sunucudan geçersiz yanıt geldi.');} if(!r.ok || data.ok===false) throw new Error(data.error || 'İşlem başarısız oldu.'); return data; }
   function showError(message){ $('repo-list').innerHTML='<div class="muted-box">'+message+'</div>'; }
   async function load(){

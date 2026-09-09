@@ -1120,14 +1120,6 @@ def create_github_repo(request):
     if visibility not in {"public", "private"}:
         return JsonResponse({"ok": False, "error": "visibility public veya private olmalı."}, status=400)
 
-    def _check_admin_token(req):
-        token = (req.POST.get('admin_token') or req.META.get('HTTP_X_ADMIN_TOKEN') or '').strip()
-        expected = os.environ.get('ADMIN_API_TOKEN') or getattr(settings, 'ADMIN_API_TOKEN', None)
-        return bool(expected and token and token == expected)
-
-    if not _check_admin_token(request):
-        return JsonResponse({"ok": False, "error": "Forbidden - missing admin token"}, status=403)
-
     result = _github_proxy("/user/repos", method="POST", body={
         "name": repo_name,
         "private": visibility == "private",
@@ -1152,12 +1144,6 @@ def push_repo(request):
     """
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "POST required"}, status=405)
-    # admin token check
-    token = (request.POST.get('admin_token') or request.META.get('HTTP_X_ADMIN_TOKEN') or '').strip()
-    expected = os.environ.get('ADMIN_API_TOKEN') or getattr(settings, 'ADMIN_API_TOKEN', None)
-    if not (expected and token and token == expected):
-        return JsonResponse({"ok": False, "error": "Forbidden - missing admin token"}, status=403)
-
     remote = (request.POST.get("remote_url") or "").strip()
     if not remote:
         return JsonResponse({"ok": False, "error": "remote_url required"}, status=400)
@@ -1196,11 +1182,6 @@ def save_settings(request):
     """
     if request.method != 'POST':
         return JsonResponse({"ok": False, "error": "POST required"}, status=405)
-    # require admin token
-    token = (request.POST.get('admin_token') or request.META.get('HTTP_X_ADMIN_TOKEN') or '').strip()
-    expected = os.environ.get('ADMIN_API_TOKEN') or getattr(settings, 'ADMIN_API_TOKEN', None)
-    if not (expected and token and token == expected):
-        return JsonResponse({"ok": False, "error": "Forbidden - missing admin token"}, status=403)
     base = (request.POST.get('OMNIROUTE_BASE_URL') or '').strip()
     key = (request.POST.get('OMNIROUTE_API_KEY') or '').strip()
     model = (request.POST.get('OMNIROUTE_DEFAULT_MODEL') or '').strip()

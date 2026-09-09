@@ -91,10 +91,6 @@
   }
   function buildHeaders(extra){
     const headers = Object.assign({}, extra || {});
-    try{
-      const admin = (window.getAdminToken && window.getAdminToken()) || localStorage.getItem('emog_admin_token') || '';
-      if(admin) headers['X-ADMIN-TOKEN'] = admin;
-    }catch(e){}
     const csr = getCookie('csrftoken') || getCookie('csrfmiddlewaretoken');
     if(csr) headers['X-CSRFToken'] = csr;
     return headers;
@@ -180,7 +176,7 @@
       const base = baseEl ? baseEl.value.trim() : ''; const key = keyEl ? keyEl.value.trim() : ''; const model = modelEl ? modelEl.value.trim() : '';
       const body = new URLSearchParams(); body.append('OMNIROUTE_BASE_URL', base); body.append('OMNIROUTE_API_KEY', key); body.append('OMNIROUTE_DEFAULT_MODEL', model);
       const dest = document.getElementById('settings-out'); if(dest) dest.textContent = 'Kaydediliyor...';
-      try{ const hdrs = (window.getAdminToken && window.getAdminToken()) ? {'X-ADMIN-TOKEN': window.getAdminToken()} : {}; const resp = await fetch('{% url "save_settings" %}', {method:'POST', body: body, headers: hdrs}); let j; try{ j = await safeJson(resp); }catch(e){ if(dest) dest.textContent = 'Sunucu hata: '+e.message; return; } if(dest) dest.textContent = JSON.stringify(j); }catch(e){ if(dest) dest.textContent = 'Hata: '+e; }
+      try{ const resp = await fetch('{% url "save_settings" %}', {method:'POST', body: body, headers: buildHeaders()}); let j; try{ j = await safeJson(resp); }catch(e){ if(dest) dest.textContent = 'Sunucu hata: '+e.message; return; } if(dest) dest.textContent = JSON.stringify(j); }catch(e){ if(dest) dest.textContent = 'Hata: '+e; }
     });
   })();
 
