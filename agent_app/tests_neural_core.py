@@ -140,6 +140,35 @@ class DiscoveryTests(SimpleTestCase):
             self.assertIsInstance(item["cons"], list)
 
 
+class DiscoveryExtensionTests(SimpleTestCase):
+    def test_hypotheses_non_empty(self):
+        from agent_app.neural_core.discovery import hypotheses
+        from agent_app.neural_core.gateway import ModelGateway
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            result = hypotheses("Mobil uygulama", ModelGateway(), max_items=3)
+        self.assertGreaterEqual(len(result), 1)
+        for item in result:
+            self.assertIn("statement", item)
+            self.assertIn("confidence", item)
+
+    def test_merge_technologies_returns_combined(self):
+        from agent_app.neural_core.discovery import merge_technologies
+
+        cands = [{"name": "A", "score": 80}, {"name": "B", "score": 70}]
+        merged = merge_technologies(cands)
+        self.assertGreaterEqual(len(merged), 2)
+        self.assertTrue(any("Birleşik" in m["name"] or "combined" in m for m in merged))
+
+    def test_experiment_plan_has_steps_and_criteria(self):
+        from agent_app.neural_core.discovery import experiment_plan
+
+        plan = experiment_plan({"name": "MVP"})
+        self.assertIn("steps", plan)
+        self.assertIn("success_criteria", plan)
+        self.assertGreaterEqual(len(plan["steps"]), 1)
+
+
 class ResearchTests(SimpleTestCase):
     def test_disabled_research_makes_no_calls(self):
         from agent_app.neural_core.research import run
