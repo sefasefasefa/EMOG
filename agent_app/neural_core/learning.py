@@ -12,6 +12,16 @@ from .models import NeuralExperience
 logger = logging.getLogger(__name__)
 
 
+class _ProposalDict(dict):
+    """Dict that also supports attribute access (for tests/compatibility)."""
+
+    def __getattr__(self, item):
+        try:
+            return self[item]
+        except KeyError as exc:
+            raise AttributeError(item) from exc
+
+
 def _outcome(score):
     try:
         value = int(score)
@@ -183,10 +193,23 @@ class LearningEngine:
         proposals = []
         if outcome in ("failure", "partial") or score_int < 60:
             try:
-                proposals = evolution.propose(self.user) or []
+                raw = evolution.propose(self.user) or []
             except Exception:
                 logger.exception("NEURAL learning: evrim onerisi basarisiz")
-                proposals = []
+                raw = []
+            for p in raw:
+                if isinstance(p, dict):
+                    data = dict(p)
+                else:
+                    data = {
+                        "id": str(getattr(p, "id", "") or ""),
+                        "title": str(getattr(p, "title", "") or ""),
+                        "rationale": str(getattr(p, "rationale", "") or ""),
+                        "changes": getattr(p, "changes", {}) or {},
+                        "risk": str(getattr(p, "risk", "") or ""),
+                        "status": str(getattr(p, "status", "") or ""),
+                    }
+                proposals.append(_ProposalDict(data))
 
         return {
             "lessons": lessons,
