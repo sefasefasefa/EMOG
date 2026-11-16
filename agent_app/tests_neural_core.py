@@ -889,3 +889,99 @@ class LearningTests(TestCase):
             )
         self.assertEqual(preferences.get_value(self.user, "tone"), "kisa")
         self.assertEqual(result["preference_updates"].get("tone"), "kisa")
+class BinaryControlTests(TestCase):
+    def setUp(self):
+        from pathlib import Path
+
+        self.user = User.objects.create(email="bin@example.com", username="bin-user")
+        self.other = User.objects.create(email="bin2@example.com", username="bin2-user")
+        self.relative_path = f"task_runs/neural/{self.user.id}/binary_test_output.txt"
+        self.absolute = Path(__file__).resolve().parent.parent / self.relative_path
+        if self.absolute.exists():
+            self.absolute.unlink()
+
+    def tearDown(self):
+        if self.absolute.exists():
+            self.absolute.unlink()
+
+    def _settings(self):
+        return {**OFFLINE, "TOOL_ROOTS": ["task_runs"], "TOOL_REQUIRE_APPROVAL": True}
+
+    def test_binary_control_delegates_list_tools(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+        from agent_app.neural_core.tools import ToolRegistry
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            registry = ToolRegistry(self.user)
+            self.assertEqual(core.list_tools(), registry.list_tools())
+
+    def test_binary_control_read_traversal_rejected(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            with self.assertRaises(ValueError):
+                core.read_file("../db.sqlite3")
+            with self.assertRaises(ValueError):
+                core.read_file("C:/Windows/win.ini")
+
+    def test_binary_control_write_without_approval_no_side_effect(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+        from agent_app.neural_core.models import NeuralToolApproval
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            approval = core.request_write(self.relative_path, "onay bekleyen icerik")
+        self.assertEqual(approval.status, "pending")
+        self.assertFalse(self.absolute.exists())
+        self.assertEqual(NeuralToolApproval.objects.filter(status="pending").count(), 1)
+
+    def test_binary_control_approved_write_creates_file(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            approval = core.request_write(self.relative_path, "yazildi")
+            result = core.decide(approval.id, True)
+        self.assertTrue(result["ok"])
+        self.assertEqual(self.absolute.read_text(encoding="utf-8"), "yazildi")
+
+    def test_binary_control_rejected_write_no_file(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            approval = core.request_write(self.relative_path, "hayir")
+            result = core.decide(approval.id, False)
+        self.assertFalse(result["ok"])
+        self.assertFalse(self.absolute.exists())
+
+    def test_binary_control_another_user_cannot_decide(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            approval = core.request_write(self.relative_path, "gizli")
+            other_core = BinaryControlCore(self.other)
+            with self.assertRaises(LookupError):
+                other_core.decide(approval.id, True)
+        self.assertFalse(self.absolute.exists())
+
+    def test_binary_control_command_allowlist(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            with self.assertRaises(ValueError):
+                core.request_command("powershell Remove-Item C:/Windows/win.ini")
+
+    def test_binary_control_permission_summary(self):
+        from agent_app.neural_core.binary_control import BinaryControlCore
+
+        with override_settings(NEURAL_CORE=self._settings()):
+            core = BinaryControlCore(self.user)
+            summary = core.permission_summary()
+        self.assertTrue(summary.get("require_approval") or summary.get("requires_approval"))
+        allowlist = summary.get("allowlist") or summary.get("command_allowlist") or []
+        self.assertIn("python", allowlist)
