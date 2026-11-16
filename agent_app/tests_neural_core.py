@@ -835,3 +835,57 @@ class ReasoningTests(SimpleTestCase):
         with override_settings(NEURAL_CORE={**OFFLINE, "OFFLINE": False}):
             hyps = generate_hypotheses("hedef", StubGateway())
         self.assertGreaterEqual(len(hyps), 1)
+
+
+class LearningTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create(email="learn@example.com", username="learn-user")
+        self.other = User.objects.create(email="learn2@example.com", username="learn2-user")
+
+    def test_learning_extracts_at_least_one_lesson(self):
+        from agent_app.neural_core.learning import LearningEngine
+        from agent_app.neural_core.models import NeuralRun
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            run = NeuralRun.objects.create(user=self.user, goal="Ogrenme testi", mode="full")
+            result = LearningEngine(self.user).learn(run, 60)
+        self.assertGreaterEqual(len(result["lessons"]), 1)
+        self.assertIn("lessons", result)
+        self.assertIn("preference_updates", result)
+        self.assertIn("proposals", result)
+        self.assertIn("shared_recorded", result)
+
+    def test_learning_low_score_proposes_deep(self):
+        from agent_app.neural_core.learning import LearningEngine
+        from agent_app.neural_core.models import NeuralRun
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            run = NeuralRun.objects.create(user=self.user, goal="Zor hedef", mode="full")
+            result = LearningEngine(self.user).learn(run, 20)
+        self.assertTrue(result["proposals"])
+        self.assertTrue(
+            any(getattr(p, "changes", {}).get("planner.depth") == "deep" for p in result["proposals"])
+        )
+
+    def test_learning_success_records_shared(self):
+        from agent_app.neural_core.learning import LearningEngine
+        from agent_app.neural_core.models import NeuralExperience, NeuralRun
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            run = NeuralRun.objects.create(user=self.user, goal="Basarili hedef", mode="full")
+            result = LearningEngine(self.user).learn(run, 85)
+        self.assertTrue(result["shared_recorded"])
+        self.assertTrue(NeuralExperience.objects.filter(user=self.user, shared=True).exists())
+
+    def test_learning_preferences_written_via_set_value(self):
+        from agent_app.neural_core import preferences
+        from agent_app.neural_core.learning import LearningEngine
+        from agent_app.neural_core.models import NeuralRun
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            run = NeuralRun.objects.create(user=self.user, goal="Pref hedef", mode="full")
+            result = LearningEngine(self.user).learn(
+                run, 75, context={"preference_updates": {"tone": "kisa"}}
+            )
+        self.assertEqual(preferences.get_value(self.user, "tone"), "kisa")
+        self.assertEqual(result["preference_updates"].get("tone"), "kisa")
