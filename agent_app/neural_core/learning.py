@@ -1,8 +1,8 @@
-"""A-�Yrenme motoru: deneyim, tercih ve evrimi birle�Ytirir.
+"""Öğrenme motoru: deneyim, tercih ve evrimi birleştirir.
 
-Bir Aal��Yt��rma sonucundan ders A��kar��r, tercihleri gA�nceller, gerekirse
-kendini geli�Ytirme Anerileri A�retir ve ba�Yar��l�� Aal��Yt��rmalar�� payla�Y��ml��
-haf��zaya kaydeder.
+Bir çalıştırma sonucundan ders çıkarır, tercihleri günceller, gerekirse
+kendini geliştirme önerileri üretir ve başarılı çalıştırmaları paylaşımlı
+hafızaya kaydeder.
 """
 import logging
 
@@ -85,6 +85,8 @@ class LearningEngine:
             is_real_run = False
         run_for_db = run if is_real_run else None
 
+        if isinstance(score, dict):
+            score = score.get("score", score.get("value", 0))
         score_int = 0
         try:
             score_int = int(score)

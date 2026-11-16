@@ -420,7 +420,7 @@ class KernelTests(TestCase):
         self.assertIn("summary", run.result)
         self.assertGreaterEqual(run.evaluation["score"], 0)
         self.assertEqual(NeuralRun.objects.filter(user=self.user).count(), 1)
-        self.assertEqual(NeuralExperience.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(NeuralExperience.objects.filter(user=self.user).count(), 2)
 
     def test_empty_goal_is_rejected(self):
         from agent_app.neural_core.kernel import CognitiveKernel
@@ -446,6 +446,35 @@ class KernelTests(TestCase):
         self.assertEqual(run.status, "completed")
         self.assertEqual(run.alternatives, [])
         self.assertTrue(run.research.get("queries"))
+
+    def test_kernel_high_score_records_shared_experience(self):
+        from agent_app.neural_core import kernel as kernel_mod
+        from agent_app.neural_core.kernel import CognitiveKernel
+        from agent_app.neural_core.models import NeuralExperience
+
+        with override_settings(NEURAL_CORE=OFFLINE):
+            run = CognitiveKernel(self.user).run("Todo API tasarla", "full")
+        self.assertEqual(run.status, "completed")
+        self.assertTrue(run.result["learning"]["shared_recorded"])
+        self.assertTrue(NeuralExperience.objects.filter(user=self.user, shared=True).exists())
+
+    def test_kernel_low_score_generates_deep_proposal(self):
+        from unittest.mock import patch
+
+        from agent_app.neural_core import kernel as kernel_mod
+        from agent_app.neural_core.kernel import CognitiveKernel
+
+        low = {"score": 20, "strengths": [], "gaps": ["x"], "verdict": "zayıf"}
+        with override_settings(NEURAL_CORE=OFFLINE), \
+                patch.object(kernel_mod.evaluation, "score_run", return_value=low):
+            run = CognitiveKernel(self.user).run("Zor hedef", "full")
+        self.assertEqual(run.status, "completed")
+        proposals = run.result["learning"]["proposals"]
+        self.assertTrue(proposals)
+        self.assertTrue(any(
+            (p.get("changes") if isinstance(p, dict) else getattr(p, "changes", {})).get("planner.depth") == "deep"
+            for p in proposals
+        ))
 
 
 class AutonomyTests(TestCase):

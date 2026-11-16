@@ -121,7 +121,7 @@ class CognitiveKernel:
             )
 
             learning_result = learning.LearningEngine(self.user, self.gateway).learn(
-                run, score, context={"mode": mode, "gaps": score.get("gaps", [])}
+                run, score["score"], context={"mode": mode, "gaps": score.get("gaps", [])}
             )
 
             result["learning"] = learning_result

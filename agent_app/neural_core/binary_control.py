@@ -33,14 +33,12 @@ class BinaryControlCore:
     def request_command(self, command, cwd="."):
         return self.registry.request_command(command, cwd)
 
-    def decide(self, approval_id, approve, user=None, *args, **kwargs):
+    def decide(self, approval_id, approve, user=None, **kwargs):
         target_user = self.user if user is None else user
-        if args:
-            target_user = args[0]
         if "user" in kwargs:
             target_user = kwargs.pop("user")
         aid = getattr(approval_id, "id", approval_id)
-        return self.registry.decide(aid, approve, target_user, *args, **kwargs)
+        return self.registry.decide(aid, approve, target_user)
 
     def permission_summary(self):
         config = getattr(self.registry, "config", None)
