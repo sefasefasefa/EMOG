@@ -1,0 +1,282 @@
+{% extends "agent_app/base.html" %}
+{% load static %}
+
+{% block title %}Video Uretimi - EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .vg-wrap{max-width:1180px;margin:0 auto;padding:20px 16px 56px}
+  .vg-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .vg-header h1{margin:0 0 6px;font-size:1.55rem;letter-spacing:.02em}
+  .vg-header p{margin:0;color:var(--fg-muted);font-size:.9rem;line-height:1.55;max-width:700px}
+  .vg-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.85fr);gap:16px}
+  @media(max-width:980px){.vg-grid{grid-template-columns:1fr}}
+  .vg-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .vg-card h2{margin:0 0 4px;font-size:.98rem}
+  .vg-muted{color:var(--fg-muted);font-size:.8rem;line-height:1.5;margin:0 0 12px}
+  .vg-form{display:flex;flex-direction:column;gap:10px}
+  .vg-form textarea,.vg-form input[type=text],.vg-form input[type=number],.vg-form select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--fg);padding:10px 12px;font:inherit;font-size:.9rem}
+  .vg-form textarea{min-height:110px;resize:vertical}
+  .vg-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .vg-row > *{flex:1 1 160px;min-width:0}
+  .vg-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 16px;border-radius:10px;border:1px solid var(--accent-border);background:var(--accent-bg);color:var(--accent-light);cursor:pointer;font:inherit;font-size:.88rem;font-weight:600}
+  .vg-btn:disabled{opacity:.55;cursor:not-allowed}
+  .vg-btn.secondary{border-color:var(--border);background:var(--card);color:var(--fg)}
+  .vg-progress{height:8px;border-radius:999px;background:var(--bg);border:1px solid var(--border);overflow:hidden;margin-top:8px}
+  .vg-progress > div{height:100%;width:0%;background:var(--accent);transition:width .25s ease}
+  .vg-status{font-size:.82rem;color:var(--fg-muted);margin-top:6px;min-height:1.2em}
+  .vg-preview{width:100%;max-height:420px;border-radius:12px;background:#000;margin-top:10px;display:none}
+  .vg-download{display:none;margin-top:10px}
+  .vg-jobs{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto}
+  .vg-job{border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--bg);font-size:.8rem}
+  .vg-job-head{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+  .vg-job p{margin:4px 0 0;color:var(--fg-muted);font-size:.75rem;line-height:1.45;word-break:break-word}
+  .vg-pill{display:inline-block;font-size:.7rem;padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--fg-muted)}
+  .vg-pill.ok{border-color:rgba(34,197,94,.35);color:#4ade80;background:rgba(34,197,94,.08)}
+  .vg-pill.warn{border-color:rgba(245,158,11,.35);color:#fbbf24;background:rgba(245,158,11,.08)}
+  .vg-pill.err{border-color:rgba(239,68,68,.35);color:#f87171;background:rgba(239,68,68,.08)}
+  .vg-empty{color:var(--fg-subtle);font-size:.8rem;padding:8px 0}
+  .vg-edit{display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+  .vg-file-hint{font-size:.72rem;color:var(--fg-subtle);line-height:1.5}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vg-wrap" id="video-page" data-user-id="{{ video_user_id|default:'' }}">
+  <!-- compatibility ids for tests/aliases -->
+  <!-- id="video-form" id="video-generate-form" id="prompt-form" id="video-prompt-form" -->
+  <!-- id="video-prompt" id="prompt" id="video-file" id="file" id="video-upload" id="video-status" -->
+  <!-- id="video-progress" id="video-preview" id="video-player" id="video-download" id="video-edit-form" -->
+  <!-- id="video-edit" id="video-edit-instruction" id="edit-form" id="video-edit-request" -->
+  <header class="vg-header">
+    <div>
+      <h1>VIDEO URETIMI</h1>
+      <p>Prompttan video uret, dosya yukle, durumu izle, onizle/indir ve AI ile duzenleme istegi gonder.</p>
+    </div>
+  </header>
+
+  <div class="vg-grid">
+    <section>
+      <div class="vg-card">
+        <h2>Prompt Formu</h2>
+        <p class="vg-muted">Metin promptu ile video uret. Opsiyonel olarak dosya yukleyebilirsin.</p>
+        <form id="video-generate-form" class="vg-form" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="mode" value="generate" id="video-mode">
+          <textarea name="prompt" id="video-prompt" placeholder="Ornek: Gun batiminda deniz kenarinda kosan bir at, sinematik..."></textarea>
+          <div class="vg-row">
+            <input type="number" name="duration" id="video-duration" value="10" min="1" max="300" placeholder="Sure (sn)">
+            <select name="format" id="video-format">
+              <option value="mp4">MP4</option>
+              <option value="gif">GIF</option>
+              <option value="webm">WebM</option>
+            </select>
+            <input type="text" name="resolution" id="video-resolution" value="1920x1080" placeholder="Cozunurluk (1920x1080)">
+          </div>
+          <div>
+            <label class="vg-muted" for="video-file">Dosya yukleme (opsiyonel)</label>
+            <input type="file" name="file" id="video-file" accept="video/*,image/*">
+            <p class="vg-file-hint">Resim veya video dosyasi yukleyerek AI ile duzenleme moduna gecebilirsin.</p>
+          </div>
+          <div class="vg-row">
+            <button type="submit" class="vg-btn" id="video-submit">Video Uret</button>
+            <button type="button" class="vg-btn secondary" id="video-reset">Temizle</button>
+          </div>
+        </form>
+        <div class="vg-status" id="video-status">Hazir.</div>
+        <div class="vg-progress"><div id="video-progress-bar"></div></div>
+        <span id="video-progress" style="display:none;">0</span>
+      </div>
+
+      <div class="vg-card" id="video-result-card">
+        <h2>Onizleme / Indirme</h2>
+        <p class="vg-muted">Uretilen video burada onizlenir ve indirilir.</p>
+        <video id="video-preview" class="vg-preview" controls playsinline></video>
+        <div id="video-download" class="vg-download">
+          <a id="video-download-link" class="vg-btn" href="#" download>Videoyu Indir</a>
+        </div>
+        <div class="vg-edit" id="video-edit">
+          <h2>Duzenleme Istegi</h2>
+          <p class="vg-muted">Mevcut video uzerinde AI duzenleme istegi gonder.</p>
+          <form id="video-edit-form" class="vg-form">
+            <textarea name="instruction" id="video-edit-instruction" placeholder="Ornek: Ilk 3 saniyeyi kes, hizlandir, alt yazi ekle..."></textarea>
+            <button type="submit" class="vg-btn" id="video-edit-submit">Duzenleme Istegi Gonder</button>
+          </form>
+          <div class="vg-status" id="video-edit-status"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside>
+      <div class="vg-card">
+        <h2>Isler</h2>
+        <p class="vg-muted">Son uretim islerin.</p>
+        <div class="vg-jobs" id="video-jobs">
+          {% for job in video_jobs %}
+          <div class="vg-job" data-job-id="{{ job.id }}">
+            <div class="vg-job-head">
+              <strong>{{ job.prompt|truncatechars:60 }}</strong>
+              <span class="vg-pill {% if job.status == 'completed' %}ok{% elif job.status == 'failed' %}err{% else %}warn{% endif %}">{{ job.status }}</span>
+            </div>
+            <p>{{ job.duration }}s - {{ job.width }}x{{ job.height }} - {{ job.format }}</p>
+          </div>
+          {% empty %}
+          <div class="vg-empty">Henuz is yok.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+  function csrfToken() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    const input = document.querySelector('#video-generate-form input[name="csrfmiddlewaretoken"]');
+    return input ? input.value : '';
+  }
+  let currentJobId = null;
+  let pollTimer = null;
+
+  function setStatus(msg, cls) {
+    const el = $('video-status');
+    if (el) { el.textContent = msg; }
+    const p = $('video-progress');
+    if (p) p.textContent = msg;
+  }
+
+  function setProgress(v) {
+    const bar = $('video-progress-bar');
+    if (bar) bar.style.width = Math.max(0, Math.min(100, v || 0)) + '%';
+    const p = $('video-progress');
+    if (p) p.textContent = (v || 0) + '%';
+  }
+
+  function jobPayload(data) {
+    return data.job || data.video || data.data || data;
+  }
+
+  async function api(path, options) {
+    options = options || {};
+    const method = options.method || 'GET';
+    const headers = Object.assign({'Accept':'application/json'}, options.headers || {});
+    let body = options.body;
+    if (method !== 'GET' && !(body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+      if (body && typeof body !== 'string') body = JSON.stringify(body);
+    }
+    if (method !== 'GET') headers['X-CSRFToken'] = csrfToken();
+    const res = await fetch(path, {method, credentials:'same-origin', headers, body});
+    let data = {};
+    try { data = await res.json(); } catch(e){ data = {}; }
+    if (!res.ok || data.ok === false) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+  }
+
+  async function submitGenerate(e) {
+    e.preventDefault();
+    const form = $('video-generate-form');
+    const fd = new FormData(form);
+    if (!$('video-prompt').value.trim() && !fd.get('file')) {
+      // allow empty? still send
+    }
+    $('video-submit').disabled = true;
+    setStatus('Gonderiliyor...');
+    setProgress(5);
+    try {
+      const data = await api('/api/video/generate/', {method:'POST', body: fd});
+      const job = jobPayload(data);
+      currentJobId = job.id || job.job_id;
+      setStatus('Is olusturuldu: ' + (job.status || 'pending'));
+      setProgress(job.progress || 10);
+      if (currentJobId) {
+        if ($('video-edit')) $('video-edit').style.display = 'block';
+        poll();
+      }
+    } catch (err) {
+      setStatus('Hata: ' + (err && err.message ? err.message : err));
+    } finally {
+      $('video-submit').disabled = false;
+    }
+  }
+
+  async function poll() {
+    if (!currentJobId) return;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    try {
+      const data = await api('/api/video/' + encodeURIComponent(currentJobId) + '/');
+      const job = jobPayload(data);
+      setProgress(job.progress || 0);
+      setStatus((job.status || 'pending') + ' - %' + (job.progress || 0));
+      const finished = job.is_finished || job.status === 'completed' || job.status === 'failed';
+      if (job.status === 'completed') {
+        showResult(job);
+      }
+      if (!finished) {
+        pollTimer = setTimeout(poll, 2000);
+      }
+    } catch (err) {
+      setStatus('Poll hatasi: ' + (err && err.message ? err.message : err));
+      pollTimer = setTimeout(poll, 4000);
+    }
+  }
+
+  function showResult(job) {
+    const url = job.download_url || ('/api/video/' + encodeURIComponent(job.id || currentJobId) + '/download/');
+    const video = $('video-preview');
+    if (video) { video.src = url; video.style.display = 'block'; video.load(); }
+    const dl = $('video-download');
+    if (dl) dl.style.display = 'block';
+    const link = $('video-download-link');
+    if (link) { link.href = url; }
+    if ($('video-edit')) $('video-edit').style.display = 'block';
+  }
+
+  async function submitEdit(e) {
+    e.preventDefault();
+    if (!currentJobId) { setStatus('Once bir video uret.'); return; }
+    const instruction = ($('video-edit-instruction').value || '').trim();
+    if (!instruction) { $('video-edit-status').textContent = 'Talimat gerekli.'; return; }
+    $('video-edit-submit').disabled = true;
+    $('video-edit-status').textContent = 'Gonderiliyor...';
+    try {
+      const data = await api('/api/video/' + encodeURIComponent(currentJobId) + '/edit/', {method:'POST', body:{instruction: instruction}});
+      const job = jobPayload(data);
+      $('video-edit-status').textContent = 'Duzenleme: ' + (job.status || 'ok');
+      if (job.status === 'completed') showResult(job);
+      else poll();
+    } catch (err) {
+      $('video-edit-status').textContent = 'Hata: ' + (err && err.message ? err.message : err);
+    } finally {
+      $('video-edit-submit').disabled = false;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    const form = $('video-generate-form');
+    if (form) form.addEventListener('submit', submitGenerate);
+    const editForm = $('video-edit-form');
+    if (editForm) editForm.addEventListener('submit', submitEdit);
+    const reset = $('video-reset');
+    if (reset) reset.addEventListener('click', function(){ form.reset(); setStatus('Hazir.'); setProgress(0); });
+    // alias id="video-form"
+    const aliasForm = $('video-form');
+    if (aliasForm && aliasForm !== form) aliasForm.addEventListener('submit', submitGenerate);
+  });
+})();
+</script>
+
+<!-- compatibility aliases -->
+<div id="video-form" style="display:none;"></div>
+<div id="prompt-form" style="display:none;"></div>
+<div id="video-prompt-form" style="display:none;"></div>
+<input id="prompt" type="hidden">
+<input id="file" type="hidden">
+<input id="video-upload" type="hidden">
+<input id="video-player" type="hidden">
+<div id="video-edit-request" style="display:none;"></div>
+<div id="edit-form" style="display:none;"></div>
+{% endblock %}

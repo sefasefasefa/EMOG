@@ -16,6 +16,7 @@ from .github import (
 )
 from .pricing_page_view import pricing_page
 from .whatsapp_page_view import whatsapp_page
+from .video_page_view import video_page
 from .whatsapp_views import WhatsAppPairView
 from .neural_core import views as neural_views
 from . import video_views
@@ -163,6 +164,9 @@ urlpatterns = [
     path('api/whatsapp/chat/<str:chat_id>/<str:action>/', __import__('agent_app.whatsapp_views', fromlist=['WhatsAppChatActionsView']).WhatsAppChatActionsView.as_view(), name='whatsapp_chat_actions'),
     path('api/whatsapp/webhook/', __import__('agent_app.whatsapp_views', fromlist=['WhatsAppWebhookView']).WhatsAppWebhookView.as_view(), name='whatsapp_webhook'),
     
+    # Video generation Page
+    path('video/', video_page, name='video_page'),
+
     # WhatsApp Page
     path('whatsapp/', whatsapp_page, name='whatsapp_page'),
 ]
