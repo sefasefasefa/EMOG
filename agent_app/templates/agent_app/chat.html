@@ -1,0 +1,3846 @@
+{% extends "agent_app/base.html" %}
+
+{% block head %}
+<style>
+  /* ===== Full-height layout for chat page ===== */
+  .wrap {
+    display: flex !important;
+    flex-direction: column;
+    height: calc(100vh - var(--header-h) - 8px) !important;
+    max-height: calc(100vh - var(--header-h) - 8px) !important;
+    overflow: hidden;
+  }
+  .page-header { flex-shrink: 0; margin-bottom: 0.5rem !important; }
+  .onboarding-banner { flex-shrink: 0; }
+
+  /* ===== Markdown / Code Block Styles ===== */
+  .bubble-text { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+  .bubble-text p { margin: 0.5em 0; }
+  .bubble-text code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg); padding: 0.15em 0.4em; border-radius: 4px; color: var(--accent); }
+  .bubble-text pre { margin: 0.75em 0; border-radius: 8px; overflow: auto; position: relative; }
+  .bubble-text pre code { font-family: var(--font-mono); font-size: 12px; line-height: 1.5; background: none; padding: 0; color: inherit; display: block; padding: 16px; overflow-x: auto; white-space: pre; }
+  .bubble-text pre .copy-btn { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 6px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--fg-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: 0.6; transition: all 150ms; z-index: 10; }
+  .bubble-text pre .copy-btn:hover { opacity: 1; background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); }
+  .bubble-text pre .copy-btn.copied { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+  .bubble-text .hljs-keyword { color: #c678dd; }
+  .bubble-text .hljs-function { color: #61afef; }
+  .bubble-text .hljs-title { color: #e06c75; }
+  .bubble-text .hljs-string { color: #98c379; }
+  .bubble-text .hljs-number { color: #d19a66; }
+  .bubble-text .hljs-comment { color: #5c6370; font-style: italic; }
+  .bubble-text .hljs-type { color: #e5c07b; }
+  .bubble-text .hljs-built_in { color: #e5c07b; }
+  .bubble-text .hljs-params { color: #abb2bf; }
+  .bubble-text .hljs-variable { color: #e06c75; }
+  .bubble-text .hljs-class { color: #e5c07b; }
+  .bubble-text .hljs-attr { color: #d19a66; }
+  .bubble-text .hljs-property { color: #98c379; }
+  .bubble-text .hljs-symbol { color: #c678dd; }
+  .bubble-text .hljs-regexp { color: #56b6c2; }
+  .bubble-text .hljs-meta { color: #5c6370; }
+  .bubble-text .hljs-selector-tag { color: #e06c75; }
+  .bubble-text .hljs-selector-id { color: #61afef; }
+  .bubble-text .hljs-selector-class { color: #c678dd; }
+  .bubble-text .hljs-operator { color: #56b6c2; }
+  .bubble-text .hljs-tag { color: #56b6c2; }
+  .bubble-text .hljs-name { color: #e06c75; }
+  .bubble-text .hljs-attribute { color: #d19a66; }
+  .bubble-text .hljs-bullet { color: #c678dd; }
+  .bubble-text .hljs-selector-attr { color: #56b6c2; }
+  .bubble-text .hljs-selector-pseudo { color: #c678dd; }
+  .bubble-text .hljs-template-tag { color: #e06c75; }
+  .bubble-text .hljs-template-variable { color: #e06c75; }
+  .bubble-text .hljs-link { color: #61afef; text-decoration: underline; }
+  .bubble-text ul, .bubble-text ol { margin: 0.5em 0; padding-left: 1.5em; }
+  .bubble-text li { margin: 0.25em 0; }
+  .bubble-text blockquote { margin: 0.5em 0; padding-left: 1em; border-left: 3px solid var(--accent); color: var(--fg-muted); font-style: italic; }
+  .bubble-text h1, .bubble-text h2, .bubble-text h3 { margin: 0.75em 0 0.5em; font-weight: 600; }
+  .bubble-text h1 { font-size: 1.25em; }
+  .bubble-text h2 { font-size: 1.15em; }
+  .bubble-text h3 { font-size: 1.05em; }
+  .bubble-text hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  .bubble-text a { color: var(--accent); text-decoration: underline; }
+  .bubble-text table { border-collapse: collapse; margin: 0.5em 0; font-size: 12px; }
+  .bubble-text th, .bubble-text td { border: 1px solid var(--border); padding: 0.3em 0.6em; }
+  .bubble-text th { background: var(--bg); font-weight: 600; }
+  .bubble-text strong { font-weight: 600; }
+  .bubble-text em { font-style: italic; }
+  .bubble-text del { text-decoration: line-through; color: var(--fg-muted); }
+  .bubble-text kbd { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg); padding: 0.1em 0.4em; border-radius: 4px; border: 1px solid var(--border); }
+  /* ===== Panel Tabs (Header) ===== */
+  .panel-tab {
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .panel-tab:hover {
+    background: var(--card-hover) !important;
+    border-color: var(--accent-border) !important;
+    color: var(--accent) !important;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+  .panel-tab.active {
+    background: linear-gradient(135deg, var(--accent-bg), var(--accent)) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    box-shadow: 0 2px 8px rgba(6,182,212,0.3);
+  }
+  .panel-tab.active:hover {
+    filter: brightness(1.05);
+  }
+  @media (max-width: 640px) {
+    .panel-tabs {
+      flex-direction: column !important;
+    }
+    .panel-tab {
+      flex: none !important;
+      width: 100%;
+    }
+  }
+
+  /* ===== Chat Layout ===== */
+  .chat-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--header-h) - 24px);
+    min-height: 500px;
+    max-height: calc(100vh - var(--header-h) - 24px);
+  }
+  @media (min-width: 1024px) {
+    .chat-layout { flex-direction: row; }
+  }
+
+  .panels-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border: none;
+    border-top: none;
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    overflow: hidden;
+    min-height: 0;
+  }
+  @media (min-width: 1024px) {
+    .panels-container { flex-direction: row; border-radius: 0 var(--radius-lg) var(--radius-lg) 0; border-left: none; }
+  }
+
+  .panel {
+    display: none !important;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    flex: 1;
+    width: 100%;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  .panel.active { display: flex !important; }
+
+  .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    overflow: visible;
+    position: relative;
+    z-index: 10;
+  }
+  .panel-header h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+  .panel-header .subtitle { color: var(--fg-muted); font-size: 12px; margin: 0; }
+
+  .panel-content {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+
+  /* ===== Chat Panel - Bubbles with Progress Tracker ===== */
+  .chat-window {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 400px !important;
+    overflow-y: auto !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .chat-window::-webkit-scrollbar { display: none; }
+
+  .bubble { display: flex; gap: 6px; max-width: 90%; animation: fadeIn .2s ease; flex-wrap: wrap; position: relative; }
+  .bubble.me { margin-left: auto; flex-direction: row-reverse; }
+  .bubble.ai { margin-right: auto; }
+  .bubble-avatar { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+  .bubble.ai .bubble-avatar { background: var(--accent-bg); color: var(--accent); }
+  .bubble.me .bubble-avatar { background: var(--accent); color: #042027; }
+  .bubble-content { background: transparent; border: none; border-radius: 0; padding: 2px 8px; position: relative; min-width: 40px; }
+  .bubble-text { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+  .bubble.me .bubble-text { color: var(--fg); }
+  .bubble.ai .bubble-text { color: var(--fg); }
+  .bubble-time { font-size: 9px; color: var(--fg-subtle); margin-top: 2px; text-align: right; }
+  .bubble.error .bubble-text { color: var(--error); }
+  .bubble.typing .bubble-text { display: flex; gap: 4px; }
+  .bubble.typing .bubble-text span { width: 6px; height: 6px; background: var(--border); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out; }
+  .bubble.typing .bubble-text span:nth-child(2) { animation-delay: 0.16s; }
+  .bubble.typing .bubble-text span:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+
+  /* Progress tracker inside AI bubble (for build/execute) */
+  .bubble-progress {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    animation: slideDown 0.3s ease-out;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .progress-tracker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  .progress-step {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: all 200ms ease;
+    user-select: none;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .progress-step:hover { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+  .progress-step.pending { opacity: 0.5; }
+  .progress-step.active {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
+    animation: stepper-pulse 1.5s ease-in-out infinite;
+  }
+  .progress-step.active::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 20px;
+    background: conic-gradient(from 0deg, var(--accent) 0deg, var(--accent) 85deg, transparent 85deg, transparent 360deg);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    padding: 2px;
+    animation: ring-spin 1.1s linear infinite;
+    pointer-events: none;
+  }
+  .progress-step.done {
+    background: var(--success-bg);
+    border-color: var(--success);
+    color: var(--success);
+  }
+  .progress-step.error {
+    background: var(--error-bg);
+    border-color: var(--error);
+    color: var(--error);
+  }
+  .progress-step-icon { font-size: 12px; flex-shrink: 0; }
+  .progress-step-label { white-space: nowrap; font-weight: 500; }
+  .progress-separator { color: var(--fg-subtle); font-size: 11px; opacity: 0.6; }
+
+  .progress-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 300ms ease, padding 200ms ease;
+    background: var(--card);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .progress-details.open {
+    max-height: 400px;
+    padding: 12px;
+  }
+  .progress-detail-item {
+    font-size: 11px;
+    color: var(--fg);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    margin: 0 -12px;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .progress-detail-item:last-child { border-bottom: none; }
+  .progress-detail-time { color: var(--fg-subtle); font-size: 9px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  .progress-detail-label { font-weight: 600; color: var(--fg); margin-right: 8px; }
+  .progress-detail-stage { font-size: 9px; color: var(--accent); background: var(--accent-bg); padding: 1px 6px; border-radius: 4px; font-weight: 500; }
+
+  /* ===== Ust asamal zinciri (breadcrumb) ===== */
+  .milestone-trail {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+  }
+  .milestone-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+  .milestone {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 9px;
+    background: var(--bg);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  }
+  .milestone:hover {
+    color: var(--accent);
+    background: var(--accent-bg);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  }
+  .milestone:active { transform: translateY(0); box-shadow: none; }
+  .milestone.active { color: var(--accent); background: var(--accent-bg); }
+  .milestone.open { color: var(--accent); background: var(--accent-bg); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  /* Tamamlanan gorevler ikon butonuna donusur: kenarlik ve metin yok */
+  .milestone.done {
+    color: var(--success);
+    background: var(--success-bg);
+    padding: 4px;
+    min-width: 28px;
+    min-height: 28px;
+    justify-content: center;
+  }
+  .milestone.done:hover,
+  .milestone.done.open { background: var(--success); color: #042027; }
+  .milestone.error { color: var(--error); background: var(--error-bg); }
+  .milestone.error:hover { background: var(--error); color: #fff; }
+  .milestone-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .milestone.done .milestone-icon { font-size: 15px; }
+  .milestone-caret {
+    font-size: 8px;
+    line-height: 1;
+    opacity: .65;
+    transition: transform 160ms ease;
+  }
+  .milestone.open .milestone-caret { transform: rotate(180deg); }
+  .activity-feed-wrap {
+    display: none;
+    margin-top: 0;
+    max-height: 360px;
+    overflow: auto;
+    padding-right: 2px;
+    width: 100%;
+  }
+  .activity-feed-wrap.open { display: block; }
+
+  /* ===== Dikey aktivite akordeonu (ajan adimlari) ===== */
+  .activity-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0;
+    width: 100%;
+  }
+  .activity-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    overflow: hidden;
+    transition: border-color 150ms ease;
+  }
+  .activity-item.active { border-color: var(--accent); }
+  .activity-item.error { border-color: var(--error); }
+  .activity-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    color: var(--fg);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 150ms ease;
+  }
+  .activity-head:hover { background: var(--accent-bg); }
+  .activity-item.active .activity-head { background: var(--accent-bg); }
+  .activity-icon { flex-shrink: 0; width: 14px; text-align: center; font-size: 11px; }
+  .activity-texts { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+  .activity-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .activity-item.active .activity-title { color: var(--accent); }
+  .activity-item.error .activity-title { color: var(--error); }
+  .activity-sub { font-size: 10px; color: var(--fg-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .activity-time { flex-shrink: 0; font-size: 9px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+  .activity-chevron { flex-shrink: 0; font-size: 10px; color: var(--fg-subtle); transition: transform 150ms ease; }
+  .activity-item.open .activity-chevron { transform: rotate(90deg); }
+  .activity-body {
+    display: none;
+    padding: 8px 10px 10px 32px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+    font-size: 11px;
+    color: var(--fg);
+    line-height: 1.55;
+    max-height: 280px;
+    overflow: auto;
+  }
+  .activity-item.open .activity-body { display: block; }
+  .activity-body pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: inherit;
+  }
+  .activity-item.request .activity-title { color: var(--accent); }
+  .activity-more {
+    font-size: 10px;
+    color: var(--fg-subtle);
+    padding: 2px 4px 4px;
+  }
+  .activity-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fg-subtle);
+    padding: 4px 2px;
+  }
+  .activity-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: activity-spin 0.9s linear infinite;
+  }
+  @keyframes activity-spin { to { transform: rotate(360deg); } }
+
+  /* ===== Agent Bubbles ===== */
+  .agent-bubble {
+    display: flex;
+    gap: 10px;
+    max-width: 95%;
+    animation: fadeIn .2s ease;
+    flex-wrap: wrap;
+    padding: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .agent-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; flex-shrink: 0;
+    transition: all 200ms ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .agent-content {
+    flex: 1; min-width: 0;
+  }
+  .agent-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .agent-name {
+    font-size: 12px; font-weight: 700; color: var(--fg);
+    text-transform: capitalize;
+  }
+  .agent-time {
+    font-size: 10px; color: var(--fg-muted); margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .agent-status {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .agent-task {
+    font-size: 12px; color: var(--fg);
+    line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+    margin-bottom: 8px;
+    background: var(--bg);
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .agent-stage {
+    font-size: 10px; color: var(--accent);
+    background: var(--accent-bg);
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .agent-progress {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .agent-progress-bar {
+    flex: 1; height: 6px; background: var(--border);
+    border-radius: 3px; overflow: hidden;
+  }
+  .agent-progress-bar > div {
+    height: 100%; background: var(--accent);
+    border-radius: 3px; transition: width 200ms ease;
+  }
+  .agent-progress-text {
+    font-size: 10px; color: var(--fg-muted); min-width: 40px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* Agent Filter in Tracker */
+  #agent-filter-container {
+    display: flex;
+    gap: 6px;
+    padding: 8px 0;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .agent-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 10px;
+    color: var(--fg-muted);
+    cursor: pointer;
+    transition: all 150ms;
+  }
+  .agent-filter-btn:hover { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .agent-filter-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+  .agent-filter-icon { font-size: 10px; }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes stepper-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 3px var(--accent-bg); }
+    50% { transform: scale(1.02); box-shadow: 0 0 0 6px transparent; }
+  }
+  @property --ring-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+  @keyframes ring-spin { to { transform: rotate(360deg); } }
+
+  .empty-chat { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--fg-muted); padding: 2rem; }
+  .empty-chat svg { width: 70px; height: 70px; margin-bottom: 1rem; opacity: 0.4; }
+  .empty-chat h3 { margin: 0 0 0.5rem; color: var(--fg); font-size: 1rem; }
+  .empty-chat p { margin: 0 0 1rem; max-width: 280px; font-size: 0.9rem; line-height: 1.5; }
+  .hint-chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .hint-chip { padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--fg-muted); cursor: pointer; transition: all 150ms; min-height: 40px; }
+  .hint-chip:hover { border-color: var(--accent-border); color: var(--accent); background: var(--accent-bg); }
+
+  .chat-input-area { border-top: 1px solid var(--border); padding: 12px 16px; background: var(--bg-elev); flex-shrink: 0; }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .input-row .form-textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 140px; padding: 10px 12px; font-size: 14px; line-height: 1.5; border-radius: var(--radius-md); }
+  .input-actions { display: flex; gap: 6px; align-items: flex-end; flex-shrink: 0; }
+  .input-actions .btn { height: 40px; min-width: 40px; padding: 0 14px; font-size: 13px; }
+
+  /* ===== Model Selector ===== */
+  .model-selector { position: relative; z-index: 20; }
+  .model-select-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 150ms; min-height: 40px; }
+  .model-select-btn:hover { border-color: var(--accent-border); background: var(--card-hover); }
+  .model-select-btn svg { width: 14px; height: 14px; color: var(--fg-muted); }
+  .model-dropdown { position: fixed; min-width: 220px; max-width: 300px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 8px; z-index: 1000; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 150ms; max-height: 300px; overflow: auto; }
+  .model-selector.open .model-dropdown { opacity: 1; visibility: visible; transform: translateY(0); }
+  .model-search { width: 100%; padding: 8px 10px; margin-bottom: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--fg); font-size: 12px; }
+  .model-search:focus { outline: none; border-color: var(--accent); }
+  .model-category { font-size: 10px; font-weight: 600; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 4px 4px; }
+  .model-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 8px; border-radius: 8px; background: transparent; border: none; color: var(--fg); font-size: 13px; cursor: pointer; text-align: left; transition: background 150ms; min-height: 40px; }
+  .model-item:hover { background: var(--card-hover); }
+  .model-item.active { background: var(--accent-bg); color: var(--accent); }
+  .model-item .model-name { flex: 1; font-weight: 500; }
+  .model-item .model-provider { font-size: 10px; color: var(--fg-muted); }
+
+  /* ===== Integrations Panel ===== */
+  .integrations-list { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+  .integration-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; transition: all 150ms; }
+  .integration-card:hover { border-color: var(--accent-border); background: var(--card-hover); }
+  .integration-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .integration-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .integration-icon.github { background: #1a1a2e; color: #fff; }
+  .integration-icon.figma { background: #f5f0ff; color: #a855f7; }
+  .integration-icon.vercel { background: #1a1a1a; color: #fff; }
+  .integration-icon.netlify { background: #00c7b7; color: #052e2b; }
+  .integration-icon.supabase { background: #3ecf8e; color: #052e1a; }
+  .integration-icon.docker { background: #2496ed; color: #fff; }
+  .integration-icon.whatsapp { background: #25d366; color: #fff; }
+  .integration-info { flex: 1; min-width: 0; }
+  .integration-title { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .integration-status { font-size: 11px; color: var(--fg-muted); }
+  .integration-status.connected { color: var(--success); }
+  .integration-desc { font-size: 12px; color: var(--fg-muted); margin-bottom: 12px; }
+  .integration-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .integration-actions .btn { font-size: 12px; padding: 8px 14px; height: 36px; }
+
+  /* ===== Live Preview Panel ===== */
+  /* Preview paneli sag/sol/alt kenarlara tam oturur; icerik zinciri tam yukseklik alir. */
+  #panel-preview .panel-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .preview-panel-content {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: 0 !important;
+  }
+  .preview-frame-wrapper {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: clamp(4px, 0.8vw, 12px);
+    padding-bottom: clamp(6px, 1.2vh, 16px);
+    background:
+      radial-gradient(circle at 50% 0%, rgba(6,182,212,.10), transparent 60%),
+      var(--bg);
+    overflow: hidden;
+  }
+  .preview-screen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    background: #fff;
+    border-radius: clamp(6px, 0.8vw, 12px);
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,.18), 0 0 0 1px rgba(128,128,128,.16);
+  }
+  .preview-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #fff;
+    display: block;
+  }
+  .preview-refresh-btn {
+    position: absolute; top: 10px; right: 10px; z-index: 20;
+    width: 36px; height: 36px; border-radius: 8px;
+    background: rgba(255,255,255,.75);
+    border: 1px solid rgba(128,128,128,0.4);
+    color: var(--fg);
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 150ms; backdrop-filter: blur(4px);
+  }
+  .preview-refresh-btn:hover { color: var(--accent); border-color: var(--accent); background: #fff; }
+  .preview-start-btn {
+    position: absolute;
+    top: 10px;
+    right: 56px;
+    z-index: 21;
+    height: 36px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #042027;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(0,0,0,.22);
+    transition: filter 150ms ease, transform 150ms ease;
+  }
+  .preview-start-btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .preview-start-btn:disabled { opacity: .65; cursor: wait; transform: none; }
+  .preview-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--fg-muted); background: var(--bg); gap: 12px; padding: 24px; text-align: center; }
+  .preview-placeholder svg { width: 64px; height: 64px; opacity: 0.4; }
+  .preview-placeholder h4 { margin: 0; color: var(--fg); font-size: 1rem; }
+  .preview-placeholder p { margin: 0; max-width: 280px; font-size: 13px; line-height: 1.5; }
+
+  /* ===== Tools Panel ===== */
+  #panel-tools .panel-content { display: flex; flex-direction: column; min-height: 0; }
+  .tools-toolbar { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-elev); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+  .tools-tree-container { flex: 1; overflow: auto; min-height: 0; padding: 8px; background: var(--bg); font-family: var(--font-mono); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--border); }
+  .tools-tree { outline: none; }
+  .tools-tree ul { list-style: none; padding: 0; margin: 0; }
+  .tools-tree li { margin: 0; padding: 2px 0; }
+  .tools-tree-row { display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: background 100ms; }
+  .tools-tree-row:hover { background: var(--card-hover); }
+  .tools-tree-row .icon { margin-right: 8px; font-size: 14px; min-width: 16px; text-align: center; }
+  .tools-tree-row .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tools-tree-toggle { background: none; border: none; color: var(--fg-muted); cursor: pointer; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; font-size: 10px; }
+  .tools-tree-toggle:hover { color: var(--fg); background: var(--card-hover); }
+  .tools-tree-children { display: none; padding-left: 16px; border-left: 1px solid var(--border); }
+  .tools-tree-children.expanded { display: block; }
+  .tools-tree-loading,
+  .tools-tree-empty { padding: 18px 12px; text-align: center; color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
+  .tools-tree-row.selected { background: var(--accent-bg); color: var(--accent); }
+  .tools-tree-row .icon { font-size: 13px; }
+
+  .tools-editor { display: none; flex-direction: column; border-top: 1px solid var(--border); background: var(--card); min-height: 300px; }
+  .tools-editor.open { display: flex; }
+  .editor-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-elev); flex-wrap: wrap; }
+  .editor-tabs { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+  .editor-tab { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px 6px 0 0; font-size: 12px; color: var(--fg-muted); cursor: pointer; }
+  .editor-tab.active { background: var(--card); border-bottom-color: var(--card); color: var(--fg); }
+  .editor-tab .close { background: none; border: none; color: var(--fg-subtle); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+  .editor-tab .close:hover { color: var(--error); }
+  .editor-content { flex: 1; position: relative; }
+  .editor-textarea { width: 100%; height: 100%; border: none; background: transparent; color: var(--fg); font-family: var(--font-mono); font-size: 13px; line-height: 1.6; padding: 1rem; resize: none; outline: none; tab-size: 2; spellcheck: false; }
+  .editor-status { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem; border-top: 1px solid var(--border); background: var(--bg-elev); font-size: 12px; color: var(--fg-muted); flex-wrap: wrap; }
+
+  /* ===== File Picker Modal ===== */
+  .file-picker-modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; visibility: hidden; transition: all .2s ease; }
+  .file-picker-modal.open { opacity: 1; visibility: visible; }
+  .file-picker-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .file-picker-tree { flex: 1; overflow: auto; padding: 8px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; }
+  .file-picker-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 1023px) {
+    .chat-layout { height: calc(100vh - var(--header-h) - 10px); }
+    .panels-container { border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+    .panel { border-radius: 0; }
+  }
+  @media (max-width: 767px) {
+    .chat-layout { height: calc(100vh - var(--header-h) - 10px); border-radius: 0; }
+    .panels-container { border-radius: 0; border: none; border-top: none; }
+    .panel-header { padding: 10px 12px; }
+    .panel-header h2 { font-size: 0.95rem; }
+    .chat-window { padding: 14px; gap: 12px; }
+    .bubble { max-width: 92%; }
+    .chat-input-area { padding: 10px 12px; }
+    .input-row { flex-direction: column; align-items: stretch; gap: 8px; }
+    .input-actions { width: 100%; }
+    .input-actions .btn { width: 100%; justify-content: center; min-height: 44px; }
+    .form-textarea { min-height: 44px !important; font-size: 16px !important; }
+    .integrations-list { padding: 12px; gap: 10px; }
+    .integration-card { padding: 12px; }
+    .tools-toolbar { flex-direction: column; align-items: stretch; }
+    .tools-toolbar .btn { width: 100%; justify-content: center; }
+  }
+  @media (max-width: 480px) {
+    .panel-tab span { display: none; }
+    .panel-tab svg { width: 20px; height: 20px; }
+    .model-select-btn { padding: 8px 10px; font-size: 11px; }
+    .model-dropdown { min-width: 180px; max-width: 260px; }
+    .hint-chip { padding: 6px 10px; font-size: 11px; }
+    .integration-actions { flex-direction: column; }
+    .integration-actions .btn { width: 100%; }
+  }
+  @media (max-height: 500px) and (orientation: landscape) {
+    .chat-layout { height: calc(100vh - var(--header-h) - 10px); }
+    .chat-window { padding: 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bubble, .panel-tab, .integration-card, .model-item, .hint-chip, .btn { animation: none !important; transition: none !important; }
+    .bubble.typing .bubble-text span { animation: none; }
+  }
+
+  /* ===== Chat Attachments ===== */
+  .chat-attachments-preview { display:none; flex-wrap:wrap; gap:8px; padding:8px 16px 0; background:var(--bg-elev); }
+  .chat-attachments-preview.has-items { display:flex; }
+  .chat-attachment-chip { display:inline-flex; align-items:center; gap:8px; max-width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:8px; background:var(--card); font-size:12px; }
+  .chat-attachment-chip .chip-thumb { width:36px; height:36px; object-fit:cover; border-radius:6px; background:var(--bg); flex-shrink:0; }
+  .chat-attachment-chip .chip-icon { width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:6px; background:var(--bg); font-size:18px; flex-shrink:0; }
+  .chat-attachment-chip .chip-meta { min-width:0; display:flex; flex-direction:column; }
+  .chat-attachment-chip .chip-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px; color:var(--fg); }
+  .chat-attachment-chip .chip-size { color:var(--fg-subtle); font-size:10px; }
+  .chat-attachment-chip .chip-remove { border:none; background:transparent; color:var(--fg-muted); cursor:pointer; font-size:16px; line-height:1; padding:2px 4px; }
+  .chat-attachment-chip .chip-remove:hover { color:var(--error); }
+  .chat-attach-btn { height:40px; min-width:40px; padding:0 10px; font-size:18px; }
+  .bubble-attachments { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .bubble-attachment-image-link { display:block; max-width:320px; }
+  .bubble-attachment-image { max-width:320px; width:100%; border-radius:10px; border:1px solid var(--border); display:block; background:var(--bg); }
+  .bubble-attachment-video { max-width:360px; width:100%; border-radius:10px; border:1px solid var(--border); background:#000; display:block; }
+  .bubble-attachment-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg); text-decoration:none; color:inherit; max-width:360px; }
+  .bubble-attachment-card:hover { border-color:var(--accent-border); background:var(--card-hover); }
+  .bubble-attachment-card .file-icon { width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:var(--card); font-size:18px; flex-shrink:0; }
+  .bubble-attachment-card .file-meta { min-width:0; flex:1; }
+  .bubble-attachment-card .file-name { font-size:13px; color:var(--fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bubble-attachment-card .file-sub { font-size:11px; color:var(--fg-subtle); }
+  .bubble-attachment-card .file-action { font-size:12px; color:var(--accent); white-space:nowrap; }
+  /* ===== Eski yol haritaları (sohbet geçmişi) ===== */
+  .history-roadmaps { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 8px; }
+  .history-roadmaps-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .roadmap-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); overflow: hidden; }
+  .roadmap-card > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+  .roadmap-card > summary::-webkit-details-marker { display: none; }
+  .roadmap-card > summary:hover { background: var(--card-hover); }
+  .roadmap-card[open] > summary { border-bottom: 1px solid var(--border); }
+  .roadmap-card-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .roadmap-card-meta { font-size: 11px; color: var(--fg-subtle); white-space: nowrap; }
+  .roadmap-progress { font-size: 11px; color: var(--accent); background: var(--accent-bg); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+  .roadmap-body { padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+  .roadmap-phase { display: flex; flex-direction: column; gap: 5px; }
+  .roadmap-phase-title { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-subtle); font-weight: 700; }
+  .roadmap-item { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--fg-muted); line-height: 1.4; }
+  .roadmap-item-icon { width: 18px; flex-shrink: 0; text-align: center; }
+  .roadmap-item.done .roadmap-item-text { color: var(--fg); }
+  .roadmap-item.failed .roadmap-item-text, .roadmap-item.error .roadmap-item-text { color: var(--error); }
+  .roadmap-item.skipped .roadmap-item-text { opacity: .55; text-decoration: line-through; }
+
+/* ===== Mobile overrides for chat ===== */
+@media (max-width: 768px) {
+  .wrap { height: auto !important; max-height: none !important; overflow: visible !important; }
+  .chat-layout { height: auto !important; min-height: 0 !important; max-height: none !important; flex-direction: column !important; }
+  .panels-container { height: auto !important; min-height: 0 !important; flex-direction: column !important; border-radius: var(--radius-lg) !important; }
+  .panel { min-height: 0 !important; height: auto !important; }
+  .panel.active { min-height: 60dvh; }
+  .panel-header { padding: 12px 14px; gap: 8px; }
+  .panel-content { overflow: visible; }
+  .chat-window { min-height: 40dvh !important; max-height: none; padding: 10px; }
+  .bubble { max-width: 100%; }
+  .bubble-content { min-width: 0; }
+  .progress-tracker { flex-wrap: wrap; }
+  .progress-step { white-space: normal; }
+  .input-area, .composer, .chat-input, .chat-composer { padding: 10px !important; }
+  .input-row, .composer-row { flex-wrap: wrap; gap: 8px; }
+  .input-row textarea, .composer-row textarea, #chat-input, #prompt { min-height: 44px; font-size: 16px; }
+  .model-selector, .toolbar-group, .chat-toolbar { flex-wrap: wrap; width: 100%; }
+  .sidebar, .chat-sidebar, .history-panel, .tools-panel { width: 100% !important; max-width: 100% !important; height: auto !important; max-height: 40dvh; }
+  .modal, .dialog { width: calc(100vw - 16px) !important; max-width: calc(100vw - 16px) !important; }
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap" data-provider="{{ provider|default:'nvidia' }}" data-authenticated="true">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  {{ active_project|json_script:"active-project-data" }}
+  {% if active_project %}
+  <div id="active-project-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:.75rem;background:var(--card);border:1px solid var(--border);border-radius:10px;font-size:13px;">
+    <a href="/projects/" style="color:var(--accent);text-decoration:none;font-weight:600;">Projeler</a>
+    <span style="color:var(--fg-subtle);">/</span>
+    <strong id="active-project-name">{{ active_project.name }}</strong>
+    <span id="active-project-status" class="badge badge-neutral">{{ active_project.status }}</span>
+    <a href="/chat/" style="margin-left:auto;color:var(--fg-muted);text-decoration:none;">Yeni sohbet</a>
+  </div>
+  {% endif %}
+  <header class="page-header" style="margin-bottom:1rem;">
+    <div style="display:flex;flex-direction:column;align-items:stretch;gap:0.75rem;">
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <a href="/" class="btn btn-ghost" aria-label="Back to menu" style="padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:center;" title="Back to menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </a>
+        <div>
+          <h1 style="font-size:1.6rem;font-weight:700;margin:0;">Chat</h1>
+          <p style="color:var(--fg-muted);margin:.25rem 0 0;">AI Assistant — Write, test, and debug code</p>
+        </div>
+      </div>
+      <nav id="panel-tabs" class="panel-tabs" role="tablist" aria-label="Panel selection" style="display:flex;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:6px;">
+        {% if "chat" in EMOG_FEATURES %}
+        <button class="panel-tab active" role="tab" aria-selected="true" aria-controls="panel-chat" data-panel="chat" style="flex:1;min-width:0;padding:10px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--accent);border-radius:var(--radius-md);color:var(--accent);transition:all 150ms ease;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Chat</span>
+        </button>
+        {% endif %}
+        {% if "panel_integrations" in EMOG_FEATURES %}
+        <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-integrations" data-panel="integrations" style="flex:1;min-width:0;padding:10px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--fg-muted);transition:all 150ms ease;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          <span>Integrations</span>
+          <span id="integrations-badge" class="badge" style="display:none;">3</span>
+        </button>
+        {% endif %}
+        {% if "panel_preview" in EMOG_FEATURES %}
+        <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-preview" data-panel="preview" style="flex:1;min-width:0;padding:10px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--fg-muted);transition:all 150ms ease;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+          <span>Preview</span>
+        </button>
+        {% endif %}
+        {% if "panel_tools" in EMOG_FEATURES %}
+        <button class="panel-tab" role="tab" aria-selected="false" aria-controls="panel-tools" data-panel="tools" style="flex:1;min-width:0;padding:10px 16px;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--fg-muted);transition:all 150ms ease;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 18 2 22 6 22 10 18 22 14 22 10 22 6 18 2 14 2 6 6 10 10 6 6 2 14 2"></polyline><path d="M14 2v20M10 2v20M6 2v20"/></svg>
+          <span>Tools</span>
+        </button>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <div id="onboarding-banner" class="onboarding-banner" style="display:none;">
+    <div class="icon">💡</div>
+    <div class="content">
+      <h4>New to EMOG?</h4>
+      <p>Type a coding task like <code style="background:var(--bg);padding:2px 6px;border-radius:4px;font-size:11px;">"Create a REST API with FastAPI"</code> and press Enter. EMOG will write, test, and iterate until it works.</p>
+    </div>
+  </div>
+
+  <div class="panels-container">
+    <!-- CHAT PANEL -->
+    <section class="panel active" id="panel-chat" role="tabpanel" aria-labelledby="chat-tab">
+      <header class="panel-header">
+        <div>
+          <h2>Chat</h2>
+          <p class="subtitle">Describe what you want built — EMOG handles the rest</p>
+        </div>
+      </header>
+
+      <div class="panel-content">
+        <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-label="Chat messages">
+          <div class="empty-chat" id="empty-chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+            <h3>Start a conversation</h3>
+            <p>Ask EMOG to write code, explain concepts, debug errors, or build entire features.</p>
+            <div class="hint-chips">
+              <button class="hint-chip" data-hint="Create a Python CLI tool that fetches weather data">Weather CLI</button>
+              <button class="hint-chip" data-hint="Build a REST API with FastAPI and SQLite">FastAPI REST API</button>
+              <button class="hint-chip" data-hint="Write a React component for a data table with sorting">React Data Table</button>
+              <button class="hint-chip" data-hint="Debug this Python error: ModuleNotFoundError">Debug Error</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <div id="chat-attachments-preview" class="chat-attachments-preview" aria-live="polite"></div>
+        <form id="chat-form" class="input-row">
+          <input type="file" id="chat-attach-input" multiple hidden>
+          <div class="input-actions">
+            <button type="button" id="chat-attach-btn" class="btn btn-ghost chat-attach-btn" aria-label="Dosya ekle" title="Dosya ekle">📎</button>
+          </div>
+          <div style="flex:1;min-width:0;">
+            <textarea id="chat-input" class="form-textarea" rows="2" placeholder="Mesaj yaz veya dosya ekle..." aria-label="Chat message"></textarea>
+          </div>
+          <div class="input-actions">
+            <button type="submit" id="chat-send" class="btn btn-primary" aria-label="Send message">Send</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Bubble Steps Panel - shows at bottom when a build/execute runs -->
+    <div id="bubble-steps-panel" class="bubble-steps-panel" role="region" aria-label="Bubble steps" style="display:none;">
+      <header class="bubble-steps-header">
+        <h3>İşlem Adımları</h3>
+        <div id="agent-filter-container"></div>
+        <button type="button" class="bubble-steps-close" aria-label="Kapat">&times;</button>
+      </header>
+      <div class="bubble-steps-content" id="bubble-steps-content"></div>
+    </div>
+
+    <!-- INTEGRATIONS PANEL -->
+    <section class="panel" id="panel-integrations" role="tabpanel" aria-labelledby="integrations-tab">
+      <header class="panel-header">
+        <h2>Integrations</h2>
+        <p class="subtitle">Connect external services and tools</p>
+      </header>
+      <div class="panel-content">
+        <div class="integrations-list" id="integrations-list">
+          <!-- GitHub -->
+          <div class="integration-card" data-integration="github">
+            <div class="integration-header">
+              <div class="integration-icon github">🐙</div>
+              <div class="integration-info">
+                <div class="integration-title">GitHub</div>
+                <div id="github-status" class="integration-status">Not connected</div>
+              </div>
+            </div>
+            <p class="integration-desc">Manage repositories, create PRs, sync code, and deploy from GitHub.</p>
+            <div class="integration-actions">
+              <button id="github-connect" class="btn btn-secondary btn-sm">Connect</button>
+              <button id="github-repos" class="btn btn-ghost btn-sm" style="display:none;">View Repos</button>
+              <button id="github-disconnect" class="btn btn-ghost btn-sm" style="display:none;">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- WhatsApp (proje bazlı rapor) -->
+          <div class="integration-card" data-integration="whatsapp" id="whatsapp-project-card">
+            <div class="integration-header">
+              <div class="integration-icon whatsapp">💬</div>
+              <div class="integration-info">
+                <div class="integration-title">WhatsApp</div>
+                <div id="whatsapp-status" class="integration-status">Proje seçilmedi</div>
+              </div>
+            </div>
+            <p class="integration-desc">Bu projenin görev raporlarını WhatsApp üzerinden al.</p>
+            <div id="whatsapp-project-config" style="display:none;flex-direction:column;gap:8px;margin-bottom:10px;">
+              <input type="tel" id="whatsapp-recipient" class="form-input" placeholder="Alıcı numara: +90 5xx xxx xx xx" autocomplete="tel">
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-muted);cursor:pointer;">
+                <input type="checkbox" id="whatsapp-enabled" style="accent-color:var(--accent);">
+                Görev raporlarını WhatsApp'a gönder
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-muted);cursor:pointer;">
+                <input type="checkbox" id="whatsapp-notify-complete" style="accent-color:var(--accent);" checked>
+                Tamamlanınca bildir
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-muted);cursor:pointer;">
+                <input type="checkbox" id="whatsapp-notify-error" style="accent-color:var(--accent);" checked>
+                Hata / iptal olunca bildir
+              </label>
+            </div>
+            <div class="integration-actions">
+              <button id="whatsapp-save" class="btn btn-secondary btn-sm">Kaydet</button>
+              <button id="whatsapp-test" class="btn btn-ghost btn-sm">Test Mesajı</button>
+              <a id="whatsapp-open" href="/whatsapp/" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">WhatsApp'ı Bağla</a>
+            </div>
+          </div>
+
+          <!-- Queue Management -->
+          <div class="integration-card" data-integration="queue">
+            <div class="integration-header">
+              <div class="integration-icon" style="background:#2dd4bf;color:#000;">⏱</div>
+              <div class="integration-info">
+                <div class="integration-title">Task Queue</div>
+                <div id="queue-status" class="integration-status">0 queued</div>
+              </div>
+            </div>
+            <p class="integration-desc">Monitor and manage background tasks.</p>
+            <div class="integration-actions">
+              <button id="queue-clear" class="btn btn-secondary btn-sm">Clear Queue</button>
+            </div>
+          </div>
+
+          <!-- Figma -->
+          <div class="integration-card" data-integration="figma">
+            <div class="integration-header">
+              <div class="integration-icon figma">🎨</div>
+              <div class="integration-info">
+                <div class="integration-title">Figma</div>
+                <div id="figma-status" class="integration-status">Not connected</div>
+              </div>
+            </div>
+            <p class="integration-desc">Import designs, export code, sync components.</p>
+            <div class="integration-actions">
+              <button id="figma-connect" class="btn btn-secondary btn-sm">Connect</button>
+              <button id="figma-import" class="btn btn-ghost btn-sm" style="display:none;">Import Design</button>
+            </div>
+          </div>
+
+          <!-- Vercel -->
+          <div class="integration-card" data-integration="vercel">
+            <div class="integration-header">
+              <div class="integration-icon vercel">▲</div>
+              <div class="integration-info">
+                <div class="integration-title">Vercel</div>
+                <div id="vercel-status" class="integration-status">Not connected</div>
+              </div>
+            </div>
+            <p class="integration-desc">Deploy projects, manage domains, view logs.</p>
+            <div class="integration-actions">
+              <button id="vercel-connect" class="btn btn-secondary btn-sm">Connect</button>
+              <button id="vercel-deploy" class="btn btn-ghost btn-sm" style="display:none;">Deploy</button>
+            </div>
+          </div>
+
+          <!-- Netlify -->
+          <div class="integration-card" data-integration="netlify">
+            <div class="integration-header">
+              <div class="integration-icon netlify">🌐</div>
+              <div class="integration-info">
+                <div class="integration-title">Netlify</div>
+                <div id="netlify-status" class="integration-status">Not connected</div>
+              </div>
+            </div>
+            <p class="integration-desc">Deploy, manage sites, configure builds.</p>
+            <div class="integration-actions">
+              <button id="netlify-connect" class="btn btn-secondary btn-sm">Connect</button>
+              <button id="netlify-deploy" class="btn btn-ghost btn-sm" style="display:none;">Deploy</button>
+            </div>
+          </div>
+
+          <!-- Supabase -->
+          <div class="integration-card" data-integration="supabase">
+            <div class="integration-header">
+              <div class="integration-icon supabase">🗄</div>
+              <div class="integration-info">
+                <div class="integration-title">Supabase</div>
+                <div id="supabase-status" class="integration-status">Not connected</div>
+              </div>
+            </div>
+            <p class="integration-desc">Database, auth, realtime, edge functions.</p>
+            <div class="integration-actions">
+              <button id="supabase-connect" class="btn btn-secondary btn-sm">Connect</button>
+              <button id="supabase-dashboard" class="btn btn-ghost btn-sm" style="display:none;">Dashboard</button>
+            </div>
+          </div>
+
+          <!-- WhatsApp eski kart kaldırıldı: proje bazlı kart GitHub'ın altında. -->
+
+
+          <!-- Docker -->
+          <div class="integration-card" data-integration="docker">
+            <div class="integration-header">
+              <div class="integration-icon docker">🐳</div>
+              <div class="integration-info">
+                <div class="integration-title">Docker</div>
+                <div id="docker-status" class="integration-status connected">Available</div>
+              </div>
+            </div>
+            <p class="integration-desc">Build images, run containers, manage deployments.</p>
+            <div class="integration-actions">
+              <button id="docker-build" class="btn btn-secondary btn-sm">Build Image</button>
+              <button id="docker-run" class="btn btn-ghost btn-sm">Run Container</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PREVIEW PANEL -->
+    <section class="panel" id="panel-preview" role="tabpanel" aria-labelledby="preview-tab">
+      <header class="panel-header">
+        <div>
+          <h2>Live Preview</h2>
+          <p class="subtitle">Real-time preview of your project</p>
+        </div>
+      </header>
+      <div class="panel-content" style="padding:0;overflow:hidden;">
+        <div class="preview-panel-content">
+          <div class="preview-frame-wrapper">
+            <div class="preview-screen" id="preview-screen">
+              <iframe id="preview-frame" class="preview-frame" src="about:blank" title="Live Preview"></iframe>
+              <button id="preview-start-btn" class="preview-start-btn" type="button" title="Preview sunucusunu başlat" style="display:none;">Preview Başlat</button>
+              <button id="preview-refresh-btn" class="preview-refresh-btn" title="Yenile" aria-label="Preview yenile">↻</button>
+              <div class="preview-placeholder" id="preview-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>
+                <h4>Henüz preview yok</h4>
+                <p>Bir proje build ettiğinizde canlı önizleme burada görünecek.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOOLS PANEL -->
+    <section class="panel" id="panel-tools" role="tabpanel" aria-labelledby="tools-tab">
+      <header class="panel-header">
+        <h2>Tools</h2>
+        <p class="subtitle">File explorer, editor, and utilities</p>
+      </header>
+      <div class="panel-content" style="padding:0;overflow:hidden;">
+        <div class="tools-toolbar">
+          <button id="tools-filetree-btn" class="btn btn-secondary btn-sm" title="Dosya ağacını aç / yenile">📁 Filetree</button>
+          <button id="tools-back-btn" class="btn btn-ghost btn-sm" style="display:none;" title="Proje listesi">← Geri</button>
+          <span id="tools-project-name" style="font-weight:600;font-size:13px;color:var(--fg);">Proje Seçili Değil</span>
+          <div style="flex:1;"></div>
+          <input type="text" id="tools-search" class="form-textarea" placeholder="Dosya ara..." style="width:200px;min-height:32px;padding:6px 10px;font-size:12px;display:none;">
+          <button id="tools-refresh-btn" class="btn btn-ghost btn-sm" title="Yenile">↻</button>
+        </div>
+        <div class="tools-tree-container" id="tools-tree-content">
+          <div class="tools-tree-empty">Dosya ağacını açmak için <strong>📁 Filetree</strong> butonuna bas.</div>
+        </div>
+        <div class="tools-editor" id="tools-editor">
+          <div class="editor-toolbar">
+            <div class="editor-tabs" id="editor-tabs"></div>
+            <button id="tools-editor-save" class="btn btn-primary btn-sm" style="margin-left:auto;">💾 Kaydet</button>
+            <button id="tools-editor-close" class="btn btn-ghost btn-sm">✕</button>
+          </div>
+          <div class="editor-content">
+            <textarea id="tools-editor-content" class="editor-textarea" spellcheck="false" disabled></textarea>
+          </div>
+          <div class="editor-status">
+            <span id="tools-editor-path" style="font-family:var(--font-mono);font-size:11px;"></span>
+            <span id="tools-editor-status" class="badge">idle</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEURAL CORE PANEL -->
+    {% if "neural_core" in EMOG_FEATURES %}
+    <section class="panel" id="panel-neural" role="tabpanel" aria-labelledby="neural-tab">
+      <header class="panel-header">
+        <h2>Neural Core</h2>
+        <p class="subtitle">EMOG bilişsel çekirdek: durum, çalışma (run), hedefler ve tercihler (chat içine entegre)</p>
+      </header>
+      <div class="panel-content" style="padding:16px;overflow:auto;">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+            <strong>Durum</strong>
+            <button id="neural-refresh-btn" class="btn btn-secondary btn-sm">Yenile</button>
+          </div>
+          <pre id="neural-status" style="margin:8px 0 0;white-space:pre-wrap;font-size:12px;color:var(--fg-muted);">Yükleniyor...</pre>
+        </div>
+
+        <div class="card" style="margin-bottom:12px;">
+          <strong>Yeni Çalışma (Run)</strong>
+          <div class="field" style="margin-top:8px;"><label>Hedef</label><textarea id="neural-goal" rows="3" class="form-textarea" placeholder="Neural Core'un çözmesini istediğin hedefi yaz..."></textarea></div>
+          <div class="field"><label>Mod</label>
+            <select id="neural-mode" class="form-select">
+              <option value="full">full</option>
+              <option value="plan">plan</option>
+              <option value="reason">reason</option>
+              <option value="discover">discover</option>
+              <option value="research">research</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button id="neural-run-btn" class="btn btn-primary btn-sm">Çalıştır</button>
+            <span id="neural-run-msg" style="font-size:12px;color:var(--fg-muted);align-self:center;"></span>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+            <strong>Son Çalışmalar</strong>
+            <button id="neural-runs-refresh-btn" class="btn btn-ghost btn-sm">Listele</button>
+          </div>
+          <div id="neural-runs" style="margin-top:8px;font-size:13px;color:var(--fg-muted);">Henüz yüklenmedi.</div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;">
+            <strong>Otonom Hedefler</strong>
+            <button id="neural-goals-refresh-btn" class="btn btn-ghost btn-sm">Yenile</button>
+          </div>
+          <div class="field" style="margin-top:8px;"><label>Yeni hedef başlığı</label><input id="neural-goal-title" class="form-input" placeholder="Örn: Haftalık rapor hazırla"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><button id="neural-goal-add-btn" class="btn btn-secondary btn-sm">Hedef Ekle</button></div>
+          <div id="neural-goals" style="font-size:13px;color:var(--fg-muted);">Henüz yüklenmedi.</div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- FILE PICKER MODAL -->
+    <div id="file-picker-modal" class="file-picker-modal" role="dialog" aria-modal="true" aria-labelledby="file-picker-title">
+      <div class="file-picker-header">
+        <h3 id="file-picker-title" style="margin:0;font-size:14px;">Dosya Seç</h3>
+        <div style="display:flex;gap:8px;">
+          <button id="file-picker-new-file" class="btn btn-primary btn-sm">+ Yeni Dosya</button>
+          <button id="file-picker-cancel" class="btn btn-ghost btn-sm">İptal</button>
+          <button id="file-picker-confirm" class="btn btn-primary btn-sm" disabled>Seç</button>
+        </div>
+      </div>
+      <div class="file-picker-tree" id="file-picker-tree"></div>
+      <div class="file-picker-footer">
+        <span id="file-picker-count" style="display:none;align-items:center;gap:6px;color:var(--fg-muted);font-size:12px;"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const $ = (id) => document.getElementById(id);
+  function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+  function escapeAttr(text) { return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+  // ===== CSRF Token =====
+  function getCSRFToken() {
+    const metaToken = document.querySelector('meta[name="csrf-token"]');
+    if (metaToken && metaToken.content) return metaToken.content;
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+}
+  }
+  }
+
+  const CSRF_TOKEN = getCSRFToken();
+  console.log('[CSRF] Token loaded:', CSRF_TOKEN ? 'YES' : 'NO');
+
+  // ===== Default Model =====
+  const DEFAULT_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
+
+  // ===== Toast System =====
+  function showToast(message, type = 'info') {
+    const container = $('toast-container') || (() => { const c = document.createElement('div'); c.id = 'toast-container'; c.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;'; document.body.appendChild(c); return c; })();
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 16px;max-width:360px;box-shadow:var(--shadow-lg);animation:slideIn 0.3s ease;display:flex;align-items:center;gap:10px;';
+    const icon = { success: '✅', error: '❌', warning: '⚠️', info: 'ℹ️' }[type] || 'ℹ️';
+    toast.innerHTML = `<span style="font-size:18px;">${icon}</span><span style="flex:1;font-size:13px;">${escapeHtml(message)}</span><button class="toast-close" style="background:none;border:none;color:var(--fg-muted);cursor:pointer;padding:2px;font-size:16px;line-height:1;">&times;</button>`;
+    toast.querySelector('.toast-close').onclick = () => { toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)'; setTimeout(() => toast.remove(), 300); };
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(100%)'; setTimeout(() => toast.remove(), 300); }, 5000);
+  }
+
+  // ===== Chat Functionality =====
+  const chatWindow = $('chat-window');
+  const chatForm = $('chat-form');
+  const chatInput = $('chat-input');
+  const chatSend = $('chat-send');
+  const emptyChat = $('empty-chat');
+  let isSending = false;
+  let currentRunId = null;
+  let activeProject = null;
+  try {
+    activeProject = JSON.parse(document.getElementById('active-project-data')?.textContent || 'null');
+  } catch (e) { activeProject = null; }
+
+  const PROJECT_STATUS_LABELS = {
+    ready: 'Hazır', building: 'Üretiliyor', queued: 'Sırada',
+    importing: 'İçe aktarılıyor', error: 'Hata', stopped: 'Durdu'
+  };
+  function updateActiveProjectStatus(status) {
+    const el = document.getElementById('active-project-status');
+    if (!el || !status) return;
+    el.textContent = PROJECT_STATUS_LABELS[status] || status;
+    el.className = 'badge ' + (status === 'ready' ? 'badge-success'
+      : status === 'error' ? 'badge-error'
+      : status === 'building' || status === 'queued' || status === 'importing' ? 'badge-warning' : 'badge-neutral');
+  }
+
+  function formatTime(date) { return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); }
+
+  // ===== Simple Markdown Renderer =====
+  function renderMarkdown(text) {
+    if (!text) return '';
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        const language = lang || 'plaintext';
+        return '<pre><code class="language-' + language + '">' + code.trimEnd() + '</code><button class="copy-btn" title="Copy" aria-label="Copy code">📋</button></pre>';
+      })
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+      .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+      .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+      .replace(/^###\s+(.+)$/gm, '<h3>$1</h3>')
+      .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+      .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+      .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
+      .replace(/^---$/gm, '<hr>')
+      .replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .split('\n')
+      .map(line => {
+        if (!line.trim()) return '<p></p>';
+        if (line.startsWith('<pre') || line.startsWith('<h') || line.startsWith('<blockquote') || line.startsWith('<li') || line.startsWith('<tr') || line.startsWith('<hr') || line.startsWith('<ul') || line.startsWith('<ol') || line.startsWith('</ul') || line.startsWith('</ol') || line.startsWith('<table')) {
+          return line;
+        }
+        return '<p>' + line + '</p>';
+      })
+      .join('\n')
+      .replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
+      .replace(/(<tr>.*<\/tr>\n?)+/g, m => '<table>' + m + '</table>')
+      .replace(/<p><\/p>/g, '')
+      .replace(/<p>(<pre|<h|<blockquote|<ul|<ol|<table|<hr)/g, '$1')
+      .replace(/(<\/pre>|<\/h\d>|<\/blockquote>|<\/ul>|<\/ol>|<\/table>|<\/hr>)<\/p>/g, '$1');
+    return html;
+  }
+
+  function enhanceCodeBlocks(container) {
+    container.querySelectorAll('pre code').forEach(code => {
+      const pre = code.parentElement;
+      if (!pre.querySelector('.copy-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.innerHTML = '📋';
+        btn.title = 'Copy';
+        btn.onclick = () => {
+          navigator.clipboard.writeText(code.textContent).then(() => {
+            btn.classList.add('copied');
+            btn.innerHTML = '✓';
+            setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '📋'; }, 2000);
+          });
+        };
+        pre.appendChild(btn);
+      }
+    });
+  }
+
+  // ===== Bubble Chat =====
+  let bubbleCounter = 0;
+  let pendingAttachments = [];
+  let pendingAttachmentSeq = 0;
+
+  function formatBytes(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n < 0) return '';
+    if (n === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let v = n;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return (i === 0 ? String(Math.round(v)) : v.toFixed(v >= 10 ? 0 : 1)) + ' ' + units[i];
+  }
+
+  function inferAttachmentKind(att) {
+    if (!att || typeof att !== 'object') return 'file';
+    const kind = String(att.kind || att.type || '').toLowerCase();
+    const mime = String(att.mime || att.mime_type || att.content_type || '').toLowerCase();
+    const name = String(att.name || att.filename || '').toLowerCase();
+    if (kind === 'image' || mime.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|svg)$/.test(name)) return 'image';
+    if (kind === 'video' || mime.startsWith('video/') || /\.(mp4|webm|mov|avi|mkv|m4v)$/.test(name)) return 'video';
+    if (kind === '3d_model' || /\.(glb|gltf|obj|fbx|stl|zip)$/.test(name)) return '3d_model';
+    if (kind === 'audio' || mime.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/.test(name)) return 'audio';
+    if (kind === 'file') return 'file';
+    return kind || 'file';
+  }
+
+  function attachmentHref(att) {
+    if (!att || typeof att !== 'object') return '';
+    return String(att.download_url || att.url || att.href || att.src || '');
+  }
+
+  function attachmentStudioHref(att) {
+    if (!att || typeof att !== 'object') return '';
+    if (att.studio_url) return String(att.studio_url);
+    if (att.scene_url) return String(att.scene_url);
+    if (att.scene_id) return '/studio/?scene=' + encodeURIComponent(String(att.scene_id));
+    return '';
+  }
+
+  function renderBubbleAttachmentsHtml(attachments) {
+    if (!Array.isArray(attachments) || attachments.length === 0) return '';
+    const items = attachments.map((att) => {
+      if (!att || typeof att !== 'object') return '';
+      const name = String(att.name || att.filename || 'dosya');
+      const sizeText = formatBytes(att.size);
+      const kind = inferAttachmentKind(att);
+      const href = attachmentHref(att);
+      const safeHref = href ? escapeAttr(href) : '';
+      const safeName = escapeHtml(name);
+      const studioHref = attachmentStudioHref(att);
+      const studioLink = studioHref
+        ? `<a class="file-action" href="${escapeAttr(studioHref)}" target="_blank" rel="noopener">Studio</a>`
+        : '';
+
+      if (kind === 'image' && safeHref) {
+        return `<a class="bubble-attachment-image-link" href="${safeHref}" target="_blank" rel="noopener"><img class="bubble-attachment-image" src="${safeHref}" alt="${escapeAttr(name)}" loading="lazy"></a>`;
+      }
+      if (kind === 'video' && safeHref) {
+        return `<div><video class="bubble-attachment-video" controls preload="metadata" src="${safeHref}"></video><div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><span style="font-size:12px;color:var(--fg-muted);">${safeName}${sizeText ? ' · ' + escapeHtml(sizeText) : ''}</span><a class="file-action" href="${safeHref}" target="_blank" rel="noopener">İndir</a>${studioLink}</div></div>`;
+      }
+
+      const icon = kind === '3d_model' ? '🧊' : (kind === 'audio' ? '🎵' : '📄');
+      const subParts = [kind === '3d_model' ? '3D model' : (kind === 'audio' ? 'Ses' : 'Dosya')];
+      if (sizeText) subParts.push(sizeText);
+      if (att.mime) subParts.push(String(att.mime));
+      const sub = escapeHtml(subParts.join(' · '));
+      const tag = safeHref ? 'a' : 'div';
+      const hrefAttr = safeHref ? ` href="${safeHref}" target="_blank" rel="noopener" download` : '';
+      const action = safeHref ? `<span class="file-action">İndir</span>` : '';
+      return `<${tag} class="bubble-attachment-card"${hrefAttr}><span class="file-icon">${icon}</span><span class="file-meta"><span class="file-name">${safeName}</span><span class="file-sub">${sub}</span></span>${action}${studioLink ? `<span style="margin-left:4px;">${studioLink}</span>` : ''}</${tag}>`;
+    }).filter(Boolean).join('');
+    return items ? `<div class="bubble-attachments">${items}</div>` : '';
+  }
+
+  function renderBubble(text, who, isError = false, extraClass = '', attachments = []) {
+    if (emptyChat) emptyChat.style.display = 'none';
+    bubbleCounter++;
+    const row = document.createElement('div');
+    row.className = 'bubble ' + (who === 'me' ? 'me' : 'ai') + (isError ? ' error' : '') + (extraClass ? ' ' + extraClass : '');
+    row.dataset.bubbleId = 'bubble-' + bubbleCounter + '-' + Date.now();
+    row.dataset.who = who;
+
+    const now = new Date();
+    const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+    const avatar = who === 'me' ? '👤' : '🤖';
+    const avatarBg = who === 'me' ? 'var(--accent)' : 'var(--accent-bg)';
+    const avatarColor = who === 'me' ? '#042027' : 'var(--accent)';
+    const safeText = (text == null ? '' : String(text));
+    const attachmentsHtml = renderBubbleAttachmentsHtml(attachments);
+    const textHtml = safeText || attachmentsHtml ? renderMarkdown(safeText) : '';
+
+    if (who === 'me') {
+      row.innerHTML = `
+        <div class="bubble-content">
+          <div class="bubble-text">${textHtml}</div>
+          ${attachmentsHtml}
+          <div class="bubble-time">${time}</div>
+        </div>
+        <div class="bubble-avatar" style="background:${avatarBg};color:${avatarColor};">${avatar}</div>
+      `;
+    } else {
+      row.innerHTML = `
+        <div class="bubble-avatar" style="background:${avatarBg};color:${avatarColor};">${avatar}</div>
+        <div class="bubble-content">
+          <div class="bubble-text">${textHtml}</div>
+          ${attachmentsHtml}
+          <div class="bubble-time">${time}</div>
+        </div>
+      `;
+    }
+
+    chatWindow.appendChild(row);
+    enhanceCodeBlocks(row.querySelector('.bubble-text'));
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return row;
+  }
+
+  // ===== Dynamic activity feed (dikey, acilir-kapanir adimlar) =====
+  let progressStages = []; // Ajanin bildirdigi asamalar (plan paneli de kullanir)
+  let currentProgressStage = -1;
+  const bubbleToolKeys = new WeakMap();
+
+  const STAGE_TITLES = {
+    start: 'Ajan başlatılıyor',
+    research: 'Araştırma ajanı çalışıyor',
+    benchmark: 'Rakip analizi ajanı çalışıyor',
+    blueprint: 'Spesifikasyon ajanı çalışıyor',
+    plan: 'Plan ajanı çalışıyor',
+    planning: 'Plan ajanı çalışıyor',
+    orchestrator: 'Çoklu ajan orkestrasyonu başladı',
+    build: 'Uygulama ajanları çalışıyor',
+    building: 'Uygulama ajanları çalışıyor',
+    tests: 'Canlı testler çalışıyor',
+    testing: 'Canlı testler çalışıyor',
+    design_review: 'Görsel tasarım denetimi başladı',
+    polish: 'Son rötuşlar yapılıyor',
+    done: 'Tamamlandı',
+    error: 'Hata',
+    failed: 'Hata',
+  };
+
+  function activityTime() {
+    const now = new Date();
+    return String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  }
+
+  function shortText(value, max = 110) {
+    const s = String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+    return s.length > max ? s.slice(0, Math.max(0, max - 1)) + '…' : s;
+  }
+
+  function normalizeSlashes(value) { return String(value || '').replace(/\\/g, '/'); }
+  function baseName(value) { const parts = normalizeSlashes(value).split('/'); return parts[parts.length - 1] || ''; }
+
+  function stageTitle(stageId, fallback) {
+    return STAGE_TITLES[stageId] || fallback || stageId || 'Ajan çalışıyor';
+  }
+
+  function stageLabel(stageId) {
+    return STAGE_TITLES[stageId] || stageId || 'Aşama';
+  }
+
+  function normalizeStageId(text) {
+    const t = String(text || '').toLowerCase();
+    if (/araştırma|arastirma|research/.test(t)) return 'research';
+    if (/rakip|benchmark/.test(t)) return 'benchmark';
+    if (/spesifikasyon|blueprint/.test(t)) return 'blueprint';
+    if (/plan/.test(t)) return 'planning';
+    if (/uygulama|build|kod/.test(t)) return 'build';
+    if (/test/.test(t)) return 'tests';
+    if (/tasarım|tasarim|design/.test(t)) return 'design_review';
+    if (/tamamlandı|tamamlandi|done/.test(t)) return 'done';
+    if (/hata|error|failed/.test(t)) return 'error';
+    return 'start';
+  }
+
+  // Ust seviye asamalar: "Tasarim hazirlaniyor > Frontend baslatiliyor > ..."
+  const MILESTONES = {
+    research: { label: 'Araştırma', icon: '🔎' },
+    benchmark: { label: 'Rakip analizi', icon: '🧭' },
+    blueprint: { label: 'Tasarım', icon: '🎨' },
+    plan: { label: 'Plan', icon: '🗺️' },
+    agents: { label: 'Ajanlar', icon: '🤖' },
+    frontend: { label: 'Frontend', icon: '🖥️' },
+    backend: { label: 'Backend', icon: '⚙️' },
+    screenshot: { label: 'Ekran görüntüsü', icon: '📸' },
+    screenshot_analysis: { label: 'Görsel analiz', icon: '🔍' },
+    tests: { label: 'Testler', icon: '🧪' },
+    done: { label: 'Tamamlandı', icon: '✅' },
+    error: { label: 'Hata', icon: '❌' },
+  };
+
+  function milestoneText(key, status) {
+    const base = MILESTONES[key] || { label: key || 'Aşama', icon: '•' };
+    if (key === 'done') return 'Tamamlandı';
+    if (key === 'error') return 'Hata';
+    if (status === 'done') return base.label + ' hazır';
+    if (status === 'error') return base.label + ' hatası';
+    if (key === 'screenshot') return 'Ekran görüntüsü alınıyor';
+    if (key === 'screenshot_analysis') return 'Görsel analiz yapılıyor';
+    if (key === 'agents') return 'Ajanlar çalışıyor';
+    if (key === 'frontend') return 'Frontend çalışıyor';
+    if (key === 'backend') return 'Backend çalışıyor';
+    if (key === 'tests') return 'Testler çalışıyor';
+    return base.label + ' hazırlanıyor';
+  }
+
+  function milestoneKeyForStage(stageId, text) {
+    const t = String(text || '').toLowerCase();
+    if (/ekran görüntüsü|screenshot/.test(t)) return 'screenshot';
+    if (/görsel analiz|görsel denetim/.test(t)) return 'screenshot_analysis';
+    if (stageId === 'start' || stageId === 'research') return 'research';
+    if (stageId === 'benchmark') return 'benchmark';
+    if (stageId === 'blueprint') return 'blueprint';
+    if (stageId === 'plan' || stageId === 'planning') return 'plan';
+    if (stageId === 'design_review') return 'screenshot';
+    if (stageId === 'build' || stageId === 'building' || stageId === 'orchestrator') return 'agents';
+    if (stageId === 'tests' || stageId === 'testing') return 'tests';
+    if (stageId === 'done') return 'done';
+    if (stageId === 'error' || stageId === 'failed') return 'error';
+    return '';
+  }
+
+  // Tiklanan gorev (milestone) ile aktivite stage'lerini eslestirir.
+  const MILESTONE_STAGES = {
+    research: ['start', 'research', 'connect'],
+    benchmark: ['benchmark'],
+    blueprint: ['blueprint'],
+    plan: ['plan', 'planning'],
+    agents: ['orchestrator', 'build', 'building'],
+    frontend: ['frontend', 'build', 'building'],
+    backend: ['backend', 'build', 'building'],
+    screenshot: ['screenshot', 'design_review'],
+    screenshot_analysis: ['screenshot_analysis', 'design_review'],
+    tests: ['tests'],
+    done: ['done'],
+    error: ['error', 'failed'],
+  };
+
+  function ensureTracker(bubbleRow) {
+    if (!bubbleRow) return null;
+    let tracker = bubbleRow.querySelector('.bubble-progress');
+    if (!tracker) tracker = createProgressTracker(bubbleRow);
+    if (!tracker) return null;
+    if (!tracker._activities) tracker._activities = [];
+    if (!tracker._milestones) tracker._milestones = [];
+    if (typeof tracker._seq !== 'number') tracker._seq = 0;
+    return tracker;
+  }
+
+  function addMilestone(bubbleRow, key, status, detail) {
+    const tracker = ensureTracker(bubbleRow);
+    if (!tracker || !key) return;
+    let milestone = tracker._milestones.find(item => item.key === key);
+    if (!milestone) {
+      milestone = { key: key, status: status || 'active' };
+      tracker._milestones.push(milestone);
+    }
+    milestone.status = status || milestone.status || 'active';
+    milestone.time = activityTime();
+    if (detail !== undefined) milestone.detail = detail;
+
+    if (milestone.status === 'active' || milestone.status === 'error' || key === 'done') {
+      tracker._milestones.forEach(other => {
+        if (other !== milestone && other.status === 'active') other.status = 'done';
+      });
+    }
+    renderProgressSteps(tracker);
+  }
+
+  function agentForPath(value) {
+    const p = normalizeSlashes(value).toLowerCase();
+    if (/\.(tsx|jsx|css|scss|sass|html|vue|svelte)$/.test(p)) return 'Frontend ajanı';
+    if (/\.(py|rb|go|java|php|sql)$/.test(p)) return 'Backend ajanı';
+    if (/(^|\/)(components|pages|public|styles?|assets|static)\//.test(p)) return 'Frontend ajanı';
+    if (/(^|\/)(api|server|models|controllers|services|routes|migrations)\//.test(p)) return 'Backend ajanı';
+    return 'Ajan';
+  }
+
+  function parseQuotedArg(raw, key) {
+    const re = new RegExp('"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"');
+    const m = String(raw || '').match(re);
+    if (!m) return '';
+    try { return JSON.parse('"' + m[1] + '"'); } catch (e) { return m[1]; }
+  }
+
+  function describeToolCall(text) {
+    const raw = String(text || '');
+    const nameMatch = raw.match(/^([A-Za-z0-9_]+)\s*\(/);
+    const name = nameMatch ? nameMatch[1] : 'tool';
+    const path = parseQuotedArg(raw, 'path');
+    const command = parseQuotedArg(raw, 'command');
+    const file = baseName(path);
+    const role = agentForPath(path);
+    const withFile = file ? ': ' + file : '';
+    const base = { title: 'Ajan çalışıyor', sub: normalizeSlashes(path), detail: raw, status: 'active' };
+    const roleKey = role.indexOf('Frontend') === 0 ? 'frontend'
+      : role.indexOf('Backend') === 0 ? 'backend' : 'agents';
+    if (['write_file', 'edit_file', 'patch_file', 'apply_patch'].includes(name)) {
+      return Object.assign(base, { title: role + ' kod yazıyor' + withFile, milestone: roleKey });
+    }
+    if (['move_file', 'copy_file'].includes(name)) return Object.assign(base, { title: 'Dosya taşınıyor' + withFile, milestone: roleKey });
+    if (name === 'delete_file' || name === 'delete_dir') return Object.assign(base, { title: 'Dosya siliniyor' + withFile, milestone: roleKey });
+    if (name === 'read_file' || name === 'code_outline') return Object.assign(base, { title: 'Dosya okunuyor' + withFile });
+    if (name === 'run_command') return Object.assign(base, { title: 'Komut çalıştırılıyor' + (command ? ': ' + shortText(command, 60) : ''), sub: command });
+    if (name === 'run_tests') return Object.assign(base, { title: 'Testler çalıştırılıyor', milestone: 'tests' });
+    if (name === 'lint_code') return Object.assign(base, { title: 'Kod kalitesi kontrol ediliyor' });
+    if (name === 'list_files' || name === 'grep_files' || name === 'analyze_dependencies') return Object.assign(base, { title: 'Proje taranıyor' });
+    if (['web_search', 'fetch_url', 'deep_research', 'http_request'].includes(name)) return Object.assign(base, { title: 'Web kaynağı inceleniyor' });
+    if (name.indexOf('git_') === 0) return Object.assign(base, { title: 'Git işlemi: ' + name.replace('git_', '') });
+    if (name.indexOf('docker_') === 0) return Object.assign(base, { title: 'Docker işlemi: ' + name.replace('docker_', '') });
+    if (name === 'database_query') return Object.assign(base, { title: 'Veritabanı sorgusu çalıştırılıyor' });
+    return Object.assign(base, { title: 'Ajan aracı çalıştırıyor: ' + name });
+  }
+
+  function createProgressTracker(bubbleRow) {
+    if (!bubbleRow || bubbleRow.dataset.who !== 'ai') return null;
+    const content = bubbleRow.querySelector('.bubble-content');
+    if (!content) return null;
+    if (content.querySelector('.bubble-progress')) return content.querySelector('.bubble-progress');
+    
+    const tracker = document.createElement('div');
+    tracker.className = 'bubble-progress';
+    tracker.innerHTML = `
+      <div class="progress-tracker"></div>
+      <div class="progress-details"></div>
+    `;
+    content.appendChild(tracker);
+    tracker._activities = [];
+    tracker._milestones = [];
+    tracker._seq = 0;
+    tracker._openKeys = new Set();
+    tracker._openMilestone = null;
+    renderProgressSteps(tracker);
+    return tracker;
+  }
+
+  function collectActivities(tracker) {
+    return (tracker && tracker._activities ? tracker._activities : []).slice().sort((a, b) => a.seq - b.seq);
+  }
+
+  function findActivityByKey(bubbleRow, key) {
+    if (!key) return null;
+    const tracker = bubbleRow ? bubbleRow.querySelector('.bubble-progress') : null;
+    if (!tracker) return null;
+    return (tracker._activities || []).find(entry => entry.key === key) || null;
+  }
+
+  function renderActivityDetail(item) {
+    const detail = String(item.detail == null ? '' : item.detail);
+    if (!detail) return '<pre>Detay yok.</pre>';
+    return '<pre>' + escapeHtml(detail) + '</pre>';
+  }
+
+  function scrollChatIfNearBottom() {
+    if (!chatWindow) return;
+    const remaining = chatWindow.scrollHeight - chatWindow.scrollTop - chatWindow.clientHeight;
+    if (remaining < 160) chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function renderProgressSteps(tracker) {
+    const trackerEl = tracker.querySelector('.progress-tracker');
+    if (!trackerEl) return;
+    const detailsEl = tracker.querySelector('.progress-details');
+    if (detailsEl) { detailsEl.classList.remove('open'); detailsEl.style.display = 'none'; }
+
+    if (!tracker._milestones) tracker._milestones = [];
+    if (typeof tracker._openMilestone === 'undefined') tracker._openMilestone = null;
+    const items = collectActivities(tracker);
+    const openKeys = tracker._openKeys || (tracker._openKeys = new Set());
+
+    // Ust zincir: biten gorevler ikon butonu, aktif/bekleyenler etiketli buton.
+    const openMilestone = tracker._openMilestone || null;
+    const trailParts = tracker._milestones.map((milestone) => {
+      const status = milestone.status || 'active';
+      const meta = MILESTONES[milestone.key] || { label: milestone.key || 'Aşama', icon: '•' };
+      const metaIcon = meta.icon && meta.icon !== '•' ? meta.icon : null;
+      const icon = status === 'active' ? '<span class="activity-spinner"></span>'
+        : status === 'error' ? '❌'
+        : status === 'done' ? (metaIcon || '✅')
+        : (meta.icon || '•');
+      const label = milestoneText(milestone.key, status);
+      const isDone = status === 'done';
+      const isOpen = openMilestone === milestone.key;
+      const labelPart = isDone
+        ? ''
+        : '<span class="milestone-label">' + escapeHtml(label) + '</span>'
+          + '<span class="milestone-caret" aria-hidden="true">▾</span>';
+      return '<button type="button" class="milestone ' + status + (isOpen ? ' open' : '') + '"'
+        + ' data-milestone="' + escapeAttr(milestone.key) + '"'
+        + ' title="' + escapeAttr(label + ' — adımları göster/gizle') + '"'
+        + ' aria-label="' + escapeAttr(label) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '">'
+        + '<span class="milestone-icon" aria-hidden="true">' + icon + '</span>'
+        + labelPart + '</button>';
+    });
+    if (!trailParts.length) {
+      trailParts.push('<button type="button" class="milestone active" data-milestone="__start" title="Başlatılıyor" aria-label="Başlatılıyor">'
+        + '<span class="milestone-icon"><span class="activity-spinner"></span></span>'
+        + '<span class="milestone-label">Başlatılıyor…</span></button>');
+    }
+    const trailHtml = '<div class="milestone-buttons">' + trailParts.join('') + '</div>';
+
+    if (!items.length) {
+      trackerEl.innerHTML = '<div class="milestone-trail">' + trailHtml
+        + '<div class="activity-feed-wrap' + (openMilestone ? ' open' : '') + '">'
+        + '<div class="activity-empty"><span class="activity-spinner"></span>'
+        + '<span>İstek alındı, ilk adım bekleniyor…</span></div></div></div>';
+      bindTrailToggle(tracker);
+      return;
+    }
+
+    // Secilen gorevin altinda yalnizca o goreve ait adimlari goster.
+    let feedItems = items;
+    if (openMilestone) {
+      const stages = MILESTONE_STAGES[openMilestone] || [];
+      const filtered = items.filter(item => {
+        const stageId = String(item.stageId || '');
+        const key = String(item.key || '');
+        return stages.indexOf(stageId) !== -1
+          || key === openMilestone
+          || key === 'stage:' + openMilestone;
+      });
+      // Eslesme bulunamazsa bos menu gostermek yerine tum adimlara dus.
+      if (filtered.length) feedItems = filtered;
+    }
+
+    // Cok uzun kosularda DOM sismesin: istek satiri hep kalsin, eski adimlar kirpilsin.
+    const MAX_VISIBLE = 120;
+    const pinned = feedItems.filter(item => item.kind === 'request');
+    const rest = feedItems.filter(item => item.kind !== 'request');
+    const visible = pinned.concat(rest.slice(-Math.max(1, MAX_VISIBLE - pinned.length)));
+    const hiddenCount = feedItems.length - visible.length;
+    const hiddenNote = hiddenCount > 0
+      ? '<div class="activity-more">… önceki ' + hiddenCount + ' adım gizlendi (Çalıştırmalar sayfasında tamamı var)</div>'
+      : '';
+
+    const feedInner = '<div class="activity-feed">' + hiddenNote + visible.map(item => {
+          const isOpen = openKeys.has(item.seq) || (item.key && openKeys.has(item.key));
+          const icon = item.status === 'active' ? '<span class="activity-spinner"></span>'
+            : item.status === 'error' ? '❌'
+            : item.status === 'done' ? '✓' : '•';
+          const sub = item.sub ? '<span class="activity-sub">' + escapeHtml(item.sub) + '</span>' : '';
+          const kindClass = item.kind === 'request' ? ' request' : '';
+          return `
+            <div class="activity-item ${item.status}${kindClass}${isOpen ? ' open' : ''}" data-activity="${item.seq}" data-stage="${escapeAttr(item.stageId || '')}">
+              <button type="button" class="activity-head" aria-expanded="${isOpen ? 'true' : 'false'}">
+                <span class="activity-icon">${icon}</span>
+                <span class="activity-texts">
+                  <span class="activity-title">${escapeHtml(item.label)}</span>
+                  ${sub}
+                </span>
+                <span class="activity-time">${item.time}</span>
+                <span class="activity-chevron">›</span>
+              </button>
+              <div class="activity-body">${renderActivityDetail(item)}</div>
+            </div>`;
+        }).join('') + '</div>';
+
+    // Menu her zaman butonlarin (yani en alttaki adimin) altinda, tam genislikte acilir.
+    trackerEl.innerHTML = '<div class="milestone-trail">' + trailHtml
+      + '<div class="activity-feed-wrap' + (openMilestone ? ' open' : '') + '">' + feedInner + '</div></div>';
+
+    bindTrailToggle(tracker);
+
+    trackerEl.querySelectorAll('.activity-item').forEach(el => {
+      const seq = Number(el.dataset.activity);
+      const item = items.find(entry => entry.seq === seq);
+      const head = el.querySelector('.activity-head');
+      if (!head) return;
+      head.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const open = el.classList.toggle('open');
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) {
+          openKeys.add(seq);
+          if (item && item.key) openKeys.add(item.key);
+        } else {
+          openKeys.delete(seq);
+          if (item && item.key) openKeys.delete(item.key);
+        }
+      });
+    });
+  }
+
+  function bindTrailToggle(tracker) {
+    const trackerEl = tracker.querySelector('.progress-tracker');
+    if (!trackerEl) return;
+    trackerEl.querySelectorAll('.milestone').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const key = btn.dataset.milestone;
+        // Ayni goreve tekrar basinca kapanir; farkli goreve basinca o gorevin adimlari acilir.
+        tracker._openMilestone = (tracker._openMilestone === key) ? null : key;
+        renderProgressSteps(tracker);
+      });
+    });
+  }
+
+  function toggleProgressDetails(tracker, stageId) {
+    // Geriye donuk uyumluluk: verilen asamaya ait ilk aktiviteyi ac/kapat.
+    const el = tracker.querySelector('.activity-item[data-stage="' + CSS.escape(stageId) + '"]');
+    const head = el ? el.querySelector('.activity-head') : null;
+    if (head) head.click();
+  }
+
+  function setProgressStages(stages) {
+    progressStages = stages || [];
+    currentProgressStage = 0;
+    // Re-render all trackers
+    document.querySelectorAll('.bubble-progress').forEach(tracker => renderProgressSteps(tracker));
+  }
+
+  function updateProgressStage(bubbleRow, stageId, status = 'active') {
+    const stageIdx = progressStages.findIndex(s => s.id === stageId);
+    if (stageIdx === -1) return;
+    if (status === 'active') {
+      currentProgressStage = stageIdx;
+    } else if (status === 'done' && stageIdx < currentProgressStage) {
+      currentProgressStage = stageIdx;
+    }
+  }
+
+  function nextToolKey(bubbleRow) {
+    if (!bubbleRow) return '';
+    const state = bubbleToolKeys.get(bubbleRow) || { count: 0, lastKey: null };
+    state.count += 1;
+    state.lastKey = 'tool:' + state.count;
+    bubbleToolKeys.set(bubbleRow, state);
+    return state.lastKey;
+  }
+
+  function summarizeToolResult(result) {
+    if (result == null) return '';
+    if (typeof result !== 'object') return shortText(result, 600);
+    if (result.path) {
+      return 'Dosya: ' + normalizeSlashes(result.path)
+        + (result.bytes ? ' (' + result.bytes + ' bayt)' : '')
+        + (result.ok === false ? ' - başarısız' : '');
+    }
+    const output = [result.stdout, result.stderr, result.output, result.error]
+      .filter(Boolean).join('\n').trim();
+    if (output) return shortText(output, 600);
+    try { return shortText(JSON.stringify(result), 600); } catch (e) { return String(result); }
+  }
+
+  function addProgressDetail(bubbleRow, stageId, label, detail, opts) {
+    opts = opts || {};
+    stageId = stageId || 'connect';
+    if (!bubbleRow) return null;
+
+    let tracker = bubbleRow.querySelector('.bubble-progress');
+    if (!tracker) tracker = createProgressTracker(bubbleRow);
+    if (!tracker) return null;
+    if (!tracker._activities) tracker._activities = [];
+    if (typeof tracker._seq !== 'number') tracker._seq = 0;
+
+    const status = opts.status || 'done';
+    const key = opts.key || '';
+    const time = activityTime();
+    let entry = key ? findActivityByKey(bubbleRow, key) : null;
+
+    if (entry) {
+      if (label) entry.label = label;
+      if (detail !== undefined && detail !== null) entry.detail = String(detail);
+      if (opts.sub !== undefined) entry.sub = opts.sub;
+      entry.status = status;
+      entry.time = time;
+    } else {
+      entry = {
+        seq: ++tracker._seq,
+        stageId: stageId,
+        label: label || 'Ajan çalışıyor',
+        sub: opts.sub || '',
+        detail: detail == null ? '' : String(detail),
+        status: status,
+        key: key,
+        kind: opts.kind || '',
+        time: time,
+      };
+      tracker._activities.push(entry);
+    }
+
+    // Ayni anda tek aktif satir olsun; yenisi/bitisi gelince oncekiler kapanir.
+    if (status === 'active' || status === 'error' || key === 'finished' || key === 'error') {
+      tracker._activities.forEach(other => {
+        if (other !== entry && other.status === 'active') other.status = 'done';
+      });
+    }
+
+    const openKeys = tracker._openKeys || (tracker._openKeys = new Set());
+    if (opts.open) {
+      openKeys.add(entry.seq);
+      if (entry.key) openKeys.add(entry.key);
+    }
+    renderProgressSteps(tracker);
+    scrollChatIfNearBottom();
+    return entry;
+  }
+
+  function statusKey(prefix, text) {
+    let hash = 0;
+    const value = String(text || '');
+    for (let i = 0; i < value.length; i++) {
+      hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+    }
+    return prefix + Math.abs(hash);
+  }
+
+  function describeStatusEvent(data) {
+    const text = String(data && data.text ? data.text : '').trim();
+    if (!text) return null;
+    let m;
+
+    // --- Araştırma adımları: her adımı ayrı ve detaylı göster -----------
+    if (/^Araştırma kapsamı:/.test(text)) {
+      return {
+        title: 'Araştırma kapsamı belirlendi',
+        sub: shortText(text.replace(/^Araştırma kapsamı:\s*/, ''), 110),
+        detail: text, status: 'done', key: 'research_scope',
+      };
+    }
+    if (/^\d+\s+arama sorgusu hazır:/.test(text)) {
+      return {
+        title: 'Arama sorguları hazır',
+        sub: shortText(text.replace(/^\d+\s+arama sorgusu hazır:\s*/, ''), 110),
+        detail: text, status: 'done', key: 'search_queries',
+      };
+    }
+    if (/^Web araması başlıyor:/.test(text)) {
+      return {
+        title: 'Web araması başlıyor',
+        sub: shortText(text.replace(/^Web araması başlıyor:\s*/, ''), 100),
+        detail: text, status: 'active', key: 'search_start',
+      };
+    }
+    if ((m = text.match(/^Araştırma sorgusu (\d+)\/(\d+):\s*(.*)$/))) {
+      return {
+        title: 'Sorgu ' + m[1] + '/' + m[2],
+        sub: shortText(m[3], 100),
+        detail: text, status: 'active', key: statusKey('search_q_start_', text),
+      };
+    }
+    if ((m = text.match(/^Araştırma sorgusu (\d+)\/(\d+) tamamlandı:\s*(.*)$/))) {
+      return {
+        title: 'Sorgu ' + m[1] + '/' + m[2] + ' tamamlandı',
+        sub: shortText(m[3], 100),
+        detail: text, status: 'done', key: statusKey('search_q_done_', text),
+      };
+    }
+    if (/^Belge derin okunuyor:/.test(text)) {
+      return {
+        title: 'Kaynaklar derin okunuyor',
+        sub: shortText(text.replace(/^Belge derin okunuyor:\s*/, ''), 110),
+        detail: text, status: 'active', key: 'deep_read_start',
+      };
+    }
+    if ((m = text.match(/^Belge okundu:\s*(\d+)\/(\d+)\s*—\s*(.+?)\s*\(([^()]+)\)\s*(?:·\s*(.*))?$/))) {
+      return {
+        title: 'Kaynak okundu: ' + shortText(m[3], 70),
+        sub: m[4] + (m[5] ? ' · ' + m[5] : ''),
+        detail: text, status: 'done', key: statusKey('doc_read_', text),
+      };
+    }
+    if (/^Belge okunamadı:/.test(text)) {
+      return {
+        title: 'Kaynak okunamadı',
+        sub: shortText(text.replace(/^Belge okunamadı:\s*/, ''), 110),
+        detail: text, status: 'error', key: statusKey('doc_fail_', text),
+      };
+    }
+    if (/^Belge ilgisiz bulundu:/.test(text)) {
+      return {
+        title: 'Kaynak ilgisiz bulundu',
+        sub: shortText(text.replace(/^Belge ilgisiz bulundu:\s*/, ''), 110),
+        detail: text, status: 'done', key: statusKey('doc_skip_', text),
+      };
+    }
+    if (/^Belge analiz edildi/.test(text)) {
+      return {
+        title: 'Belge notları hazır',
+        sub: shortText(text, 110),
+        detail: text, status: 'done', key: 'notes_ready',
+      };
+    }
+    if (/^Notlar sentezleniyor:/.test(text)) {
+      return {
+        title: 'Notlar sentezleniyor',
+        sub: shortText(text.replace(/^Notlar sentezleniyor:\s*/, ''), 110),
+        detail: text, status: 'active', key: 'synthesis_start',
+      };
+    }
+    if ((m = text.match(/^Not sentezleniyor (\d+)\/(\d+):\s*(.*)$/))) {
+      return {
+        title: 'Not sentezleniyor ' + m[1] + '/' + m[2],
+        sub: shortText(m[3], 100),
+        detail: text, status: 'active', key: statusKey('synth_note_', text),
+      };
+    }
+    if (/^Sentez modeli çalışıyor:/.test(text)) {
+      return {
+        title: 'Sentez modeli çalışıyor',
+        sub: shortText(text.replace(/^Sentez modeli çalışıyor:\s*/, ''), 110),
+        detail: text, status: 'active', key: 'synthesis_model',
+      };
+    }
+    if (/^Sentez tamamlandı:/.test(text)) {
+      return {
+        title: 'Sentez tamamlandı',
+        sub: shortText(text.replace(/^Sentez tamamlandı:\s*/, ''), 110),
+        detail: text, status: 'done', key: 'synthesis_done',
+      };
+    }
+    if (/^\d+\s+rakip adayı bulundu:/.test(text)) {
+      return {
+        title: 'Rakip adayları bulundu',
+        sub: shortText(text.replace(/^\d+\s+rakip adayı bulundu:\s*/, ''), 110),
+        detail: text, status: 'done', key: 'benchmark_candidates',
+      };
+    }
+    if ((m = text.match(/^Rakip ziyareti:\s*(\d+)\/(\d+)\s*—\s*(.+?)\s*\(([^()]+)\)$/))) {
+      return {
+        title: 'Rakip incelendi ' + m[1] + '/' + m[2],
+        sub: shortText(m[3], 80) + ' · ' + m[4],
+        detail: text, status: 'done', key: statusKey('benchmark_visit_', text),
+      };
+    }
+
+    if (text.indexOf('İstek:') === 0) {
+      const request = text.slice(text.indexOf(':') + 1).trim();
+      return { title: 'İstek', sub: shortText(request, 90), detail: request, status: 'done', key: 'request', kind: 'request' };
+    }
+    if ((m = text.match(/^Belge okundu:\s*(\d+)\/(\d+)/))) {
+      return { title: 'Kaynaklar okunuyor', sub: m[1] + '/' + m[2] + ' belge okundu', detail: text, status: 'active', key: 'deep_read' };
+    }
+    if ((m = text.match(/^Rakip ziyareti:\s*(\d+)\/(\d+)/))) {
+      return { title: 'Rakip siteler inceleniyor', sub: m[1] + '/' + m[2] + ' site', detail: text, status: 'active', key: 'benchmark_visit' };
+    }
+    if ((m = text.match(/^Uygulama:\s*(.+?)(?:\s*\((\d+)\/(\d+)\))?$/))) {
+      const label = m[1] + (m[2] ? ' · ' + m[2] + '/' + m[3] : '');
+      return { title: 'Kod yazılıyor', sub: label, detail: text, status: 'active', key: 'apply_progress' };
+    }
+    if ((m = text.match(/^Worker\s+(\d+):\s*(.*)$/))) {
+      const rest = m[2] || '';
+      const failed = /hata|başarısız/i.test(rest);
+      const finished = /tamamlandı/i.test(rest);
+      return {
+        title: 'Ajan ' + m[1] + (failed ? ' hata verdi' : finished ? ' tamamladı' : ' çalışıyor'),
+        sub: shortText(rest.replace(/[✓✗]/g, '').trim(), 90),
+        detail: text,
+        status: failed ? 'error' : finished ? 'done' : 'active',
+        key: 'worker_' + m[1],
+      };
+    }
+    if (text.indexOf('WorkerPool başlatıldı') === 0) {
+      const count = (text.match(/(\d+)/) || [])[1];
+      return { title: count ? count + ' paralel ajan başlatıldı' : 'Paralel ajanlar başlatıldı', detail: text, status: 'active', key: 'worker_pool', milestone: 'agents' };
+    }
+    if (text.indexOf('WorkerPool durduruldu') === 0) {
+      return { title: 'Ajan havuzu durduruldu', detail: text, status: 'done', key: 'worker_pool', milestone: 'agents' };
+    }
+    if (/derin okunuyor/.test(text)) return { title: 'Kaynaklar okunuyor', sub: shortText(text, 90), detail: text, status: 'active', key: 'deep_read' };
+    if (/not sentezleniyor/.test(text)) return { title: 'Notlar sentezleniyor', sub: shortText(text, 90), detail: text, status: 'active', key: 'synthesis' };
+    if (/Araştırma dosyası hazır/.test(text)) return { title: 'Araştırma tamamlandı', sub: shortText(text, 90), detail: text, status: 'done', key: 'research_done' };
+    if (/Arama tamamlandı/.test(text)) return { title: 'Web araması tamamlandı', sub: shortText(text, 90), detail: text, status: 'done', key: 'search_done' };
+    if (/site profillendi/.test(text)) return { title: 'Rakip analizi tamamlandı', sub: shortText(text, 90), detail: text, status: 'done', key: 'benchmark_done' };
+    if (/Spesifikasyon hazır/.test(text)) return { title: 'Spesifikasyon hazır', sub: shortText(text, 90), detail: text, status: 'done', key: 'blueprint_done' };
+    if (/Plan hazir|Plan hazır/.test(text)) return { title: shortText(text, 90), detail: text, status: 'done', key: 'plan_ready' };
+    if (/Ekran görüntüsü alınıyor/.test(text)) return { title: text, detail: text, status: 'active', key: 'screenshot', milestone: 'screenshot' };
+    if (/Ekran görüntüsü alındı/.test(text)) return { title: 'Ekran görüntüsü alındı', sub: shortText(text.replace(/^Ekran görüntüsü alındı:?\s*/, ''), 90), detail: text, status: 'done', key: 'screenshot', milestone: 'screenshot' };
+    if (/Görsel analiz yapılıyor|Ekran görüntüsü analiz ediliyor/.test(text)) return { title: 'Ekran görüntüsü analiz ediliyor', sub: shortText(text, 90), detail: text, status: 'active', key: 'screenshot_analysis', milestone: 'screenshot_analysis' };
+    if (/Görsel denetim bitti/.test(text)) return { title: 'Tasarım denetimi tamamlandı', sub: shortText(text, 90), detail: text, status: 'done', key: 'design_review_done', milestone: 'screenshot_analysis' };
+    if (/Geliştirme sunucusu başlatılıyor/.test(text)) return { title: 'Önizleme sunucusu başlatılıyor', sub: shortText(text.replace(/^.*?:\s*/, ''), 80), detail: text, status: 'active', key: 'preview_server' };
+    if (text.charAt(0) === '!') return { title: shortText(text.replace(/^!\s*/, ''), 90), detail: text, status: 'error', key: '' };
+    if (text.charAt(0) === '✓') return { title: shortText(text.replace(/^✓\s*/, ''), 90), detail: text, status: 'done', key: '' };
+    if (text.charAt(0) === '✗') return { title: shortText(text.replace(/^✗\s*/, ''), 90), detail: text, status: 'error', key: '' };
+    return { title: shortText(text, 90), detail: text, status: 'done', key: '' };
+  }
+
+  function showTypingIndicator() {
+    const row = document.createElement('div'); row.className = 'bubble ai typing';
+    row.innerHTML = `<div class="bubble-avatar" style="background:var(--accent-bg);color:var(--accent);">🤖</div><div class="bubble-content"><div class="bubble-text" style="display:flex;gap:4px;"><span style="width:8px;height:8px;background:var(--border);border-radius:50%;animation:bounce 1.4s infinite ease-in-out;"></span><span style="width:8px;height:8px;background:var(--border);border-radius:50%;animation:bounce 1.4s infinite ease-in-out;animation-delay:0.16s;"></span><span style="width:8px;height:8px;background:var(--border);border-radius:50%;animation:bounce 1.4s infinite ease-in-out;animation-delay:0.32s;"></span></div></div>`;
+    chatWindow.appendChild(row); chatWindow.scrollTop = chatWindow.scrollHeight; return row;
+  }
+
+  function renderPendingAttachmentsPreview() {
+    const preview = $('chat-attachments-preview');
+    if (!preview) return;
+    preview.innerHTML = '';
+    if (!pendingAttachments.length) {
+      preview.classList.remove('has-items');
+      return;
+    }
+    pendingAttachments.forEach((item) => {
+      const file = item.file;
+      const kind = inferAttachmentKind({ name: file.name, mime: file.type });
+      const chip = document.createElement('div');
+      chip.className = 'chat-attachment-chip';
+      chip.dataset.attachId = String(item.id);
+      let thumbHtml = `<span class="chip-icon">${kind === 'image' ? '🖼️' : kind === 'video' ? '🎬' : kind === '3d_model' ? '🧊' : '📄'}</span>`;
+      if (kind === 'image' && item.previewUrl) {
+        thumbHtml = `<img class="chip-thumb" src="${escapeAttr(item.previewUrl)}" alt="${escapeAttr(file.name)}">`;
+      }
+      chip.innerHTML = `
+        ${thumbHtml}
+        <span class="chip-meta">
+          <span class="chip-name" title="${escapeAttr(file.name)}">${escapeHtml(file.name)}</span>
+          <span class="chip-size">${escapeHtml(formatBytes(file.size))}</span>
+        </span>
+        <button type="button" class="chip-remove" aria-label="Dosyayı kaldır" title="Kaldır" data-remove-attach="${item.id}">&times;</button>
+      `;
+      preview.appendChild(chip);
+    });
+    preview.classList.add('has-items');
+  }
+
+  function addPendingFiles(fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    files.forEach((file) => {
+      const id = ++pendingAttachmentSeq;
+      const item = { id, file, previewUrl: '' };
+      if ((file.type || '').startsWith('image/')) {
+        try { item.previewUrl = URL.createObjectURL(file); } catch (e) { item.previewUrl = ''; }
+      }
+      pendingAttachments.push(item);
+    });
+    renderPendingAttachmentsPreview();
+  }
+
+  function removePendingAttachment(id) {
+    const idx = pendingAttachments.findIndex((item) => String(item.id) === String(id));
+    if (idx === -1) return;
+    const [removed] = pendingAttachments.splice(idx, 1);
+    if (removed && removed.previewUrl) {
+      try { URL.revokeObjectURL(removed.previewUrl); } catch (e) {}
+    }
+    renderPendingAttachmentsPreview();
+  }
+
+  function clearPendingAttachments() {
+    pendingAttachments.forEach((item) => {
+      if (item && item.previewUrl) {
+        try { URL.revokeObjectURL(item.previewUrl); } catch (e) {}
+      }
+    });
+    pendingAttachments = [];
+    renderPendingAttachmentsPreview();
+    const input = $('chat-attach-input');
+    if (input) input.value = '';
+  }
+
+  async function sendMessage() {
+    const txt = chatInput.value.trim();
+    const hasFiles = pendingAttachments.length > 0;
+    if ((!txt && !hasFiles) || isSending) return;
+    isSending = true; chatSend.disabled = true; chatSend.textContent = 'Sending...';
+
+    const optimisticAttachments = pendingAttachments.map((item) => {
+      const file = item.file;
+      const kind = inferAttachmentKind({ name: file.name, mime: file.type });
+      const att = {
+        type: kind === '3d_model' ? '3d_model' : (kind === 'image' || kind === 'video' ? kind : 'file'),
+        kind,
+        name: file.name,
+        mime: file.type || '',
+        size: file.size || 0,
+        status: 'uploading',
+      };
+      if (kind === 'image' || kind === 'video') {
+        try { att.url = URL.createObjectURL(file); } catch (e) { att.url = item.previewUrl || ''; }
+      }
+      return att;
+    });
+    const filesToSend = pendingAttachments.map((item) => item.file);
+
+    renderBubble(txt, 'me', false, '', optimisticAttachments);
+    chatInput.value = ''; chatInput.style.height = 'auto';
+    clearPendingAttachments();
+    const typingEl = showTypingIndicator();
+    let aiBubble = null;
+    try {
+      console.log('[sendMessage] Sending message:', txt.substring(0, 50), 'attachments:', filesToSend.length);
+      console.log('[sendMessage] CSRF_TOKEN:', CSRF_TOKEN ? 'SET' : 'MISSING');
+
+      const fd = new FormData();
+      fd.append('message', txt);
+      fd.append('model', DEFAULT_MODEL);
+      fd.append('csrfmiddlewaretoken', CSRF_TOKEN || '');
+      filesToSend.forEach((file) => fd.append('attachments[]', file, file.name));
+
+      const resp = await fetch('/assistant/message/', {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-CSRFToken': CSRF_TOKEN || '' },
+        credentials: 'include'
+      });
+      console.log('[sendMessage] Response status:', resp.status, resp.statusText);
+
+      let j;
+      const contentType = resp.headers.get('content-type');
+      console.log('[sendMessage] Response content-type:', resp.headers.get('content-type'));
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await resp.text();
+        console.error('Non-JSON response:', text);
+        throw new Error('Server returned non-JSON response: ' + text.substring(0, 200));
+      }
+      try { j = await resp.json(); } catch(e) { throw new Error('Invalid JSON response'); }
+      console.log('[sendMessage] Response JSON:', j);
+      if (!resp.ok || !j.ok) throw new Error(j?.error || 'Request failed: ' + resp.status);
+      if (j.project_id) {
+        const url = '/chat/?project=' + encodeURIComponent(j.project_id);
+        if (window.location.pathname + window.location.search !== url) {
+          history.replaceState({}, '', url);
+        }
+      }
+
+      typingEl.remove();
+      aiBubble = renderBubble(j.reply || '', 'ai');
+      if (j.intent === 'build' || j.intent === 'execute') {
+          createProgressTracker(aiBubble);
+      }
+      if ((j.intent === 'execute' || j.intent === 'build') && j.run_id) {
+        currentRunId = j.run_id;
+        startRunStream(j.run_id, aiBubble);
+        refreshQueue();
+        if (j.intent === 'execute') startPreviewForTask(j.run_id);
+      }
+    } catch(e) {
+      typingEl.remove();
+      console.error('[sendMessage] Error:', e);
+      const errBubble = renderBubble('Error: ' + String(e), 'ai', true);
+    }
+    finally { isSending = false; chatSend.disabled = false; chatSend.textContent = 'Send'; chatInput.focus(); }
+  }
+
+  function renderRunFailure(aiBubble, errorText, accumulatedText) {
+    const message = String(errorText || 'Görev başarısız oldu.');
+    if (aiBubble) {
+      aiBubble.classList.remove('live');
+      aiBubble.classList.add('error');
+      const textEl = aiBubble.querySelector('.bubble-text');
+      if (textEl) {
+        const combined = accumulatedText
+          ? accumulatedText + '\n\n---\n\n**Hata:** ' + message
+          : '**Görev başarısız oldu.**\n\n' + message;
+        textEl.innerHTML = renderMarkdown(combined);
+        enhanceCodeBlocks(textEl);
+      }
+      ensureStage('error', 'Hata', '❌');
+      updateProgressStage(aiBubble, 'error', 'active');
+      addMilestone(aiBubble, 'error', 'error');
+      addProgressDetail(aiBubble, 'error', 'Görev başarısız', message.substring(0, 4000), {
+        status: 'error', key: 'error', sub: shortText(message, 90)
+      });
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+    stopPreviewPolling();
+    currentRunId = null;
+    refreshQueue();
+  }
+
+  async function fetchRunText(runId) {
+    try {
+      const resp = await fetch('/task/logs/' + runId + '/', { credentials: 'include' });
+      const data = await resp.json();
+      if (!data.ok) return '';
+      const lines = data.lines || [];
+      const outputs = lines.filter(l => l && l.type === 'output').map(l => l.text).filter(Boolean);
+      if (outputs.length) return outputs.join('\n\n');
+      const summaries = lines.filter(l => l && l.type === 'summary').map(l => l.text).filter(Boolean);
+      if (summaries.length) return summaries[summaries.length - 1];
+      return '';
+    } catch (e) { return ''; }
+  }
+
+  // Sayfa acilisinda yalnizca GERCEKTEN devam eden kosuya yeniden baglanilir.
+  // Bitmis/basarisiz eski kosularin ciktisi veya hata metni sohbete geri
+  // basilmaz; aksi halde baska isteklerden kalan hatalar yeni mesaj gibi
+  // gorunur. Gecmis kayitlar "Calistirmalar" sayfasinda kalir.
+  const RESTORE_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+  function isLiveRun(project) {
+    if (!project || !project.last_run_id) return false;
+    const status = project.last_run_status || '';
+    if (status !== 'running' && status !== 'queued') return false;
+    const stamp = Date.parse(project.last_run_at || project.updated_at || '');
+    if (Number.isNaN(stamp)) return false;
+    return (Date.now() - stamp) <= RESTORE_MAX_AGE_MS;
+  }
+
+  // ===== Geçmiş yol haritaları =====
+  function roadmapStatusIcon(status) {
+    return (status === 'done' || status === 'completed') ? '✅'
+      : (status === 'failed' || status === 'error') ? '❌'
+      : status === 'skipped' ? '⏭'
+      : (status === 'in_progress' || status === 'active') ? '⏳'
+      : '•';
+  }
+
+  function roadmapStatusLabel(status) {
+    return {
+      completed: 'Tamamlandı', done: 'Tamamlandı',
+      failed: 'Başarısız', skipped: 'Atlandı',
+      cancelled: 'İptal edildi', canceled: 'İptal edildi',
+      running: 'Devam ediyor', in_progress: 'Devam ediyor', active: 'Devam ediyor',
+      queued: 'Sırada', pending: 'Bekliyor',
+    }[status] || status || 'Bekliyor';
+  }
+
+  function renderHistoryRoadmaps(runs) {
+    const existing = document.getElementById('history-roadmaps');
+    if (existing) existing.remove();
+    if (!chatWindow || !Array.isArray(runs) || !runs.length) return;
+
+    const wrap = document.createElement('div');
+    wrap.id = 'history-roadmaps';
+    wrap.className = 'history-roadmaps';
+    const head = document.createElement('div');
+    head.className = 'history-roadmaps-head';
+    head.innerHTML = '<span>🗺️</span><span>Önceki yol haritaları</span>';
+    wrap.appendChild(head);
+
+    runs.forEach((run, runIndex) => {
+      const items = Array.isArray(run.items) ? run.items : [];
+      if (!items.length) return;
+      const details = document.createElement('details');
+      details.className = 'roadmap-card';
+      if (runIndex === 0) details.open = true;
+
+      const total = Number(run.total || items.length);
+      const done = Number(run.done || 0);
+      const failed = Number(run.failed || 0);
+      const statusText = roadmapStatusLabel(run.status);
+      const taskText = run.task || 'Proje üretimi';
+      const progressText = failed
+        ? `${done}/${total} tamam · ${failed} hata`
+        : `${done}/${total} tamam`;
+      const dateText = (() => {
+        const raw = run.completed_at || run.enqueued_at || '';
+        const d = raw ? new Date(raw) : null;
+        return d && !Number.isNaN(d.getTime())
+          ? d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '';
+      })();
+
+      const summary = document.createElement('summary');
+      summary.innerHTML =
+        '<span class="roadmap-card-title" title="' + escapeAttr(taskText) + '">' +
+          escapeHtml(taskText) +
+        '</span>' +
+        '<span class="roadmap-progress">' + escapeHtml(progressText) + '</span>' +
+        '<span class="roadmap-card-meta">' + escapeHtml(statusText) +
+          (dateText ? ' · ' + escapeHtml(dateText) : '') + '</span>';
+      details.appendChild(summary);
+
+      const body = document.createElement('div');
+      body.className = 'roadmap-body';
+      const groups = new Map();
+      items.forEach((item) => {
+        const phase = item.phase_label || item.phase || 'Diğer';
+        if (!groups.has(phase)) groups.set(phase, []);
+        groups.get(phase).push(item);
+      });
+      groups.forEach((phaseItems, phaseLabel) => {
+        const phaseEl = document.createElement('div');
+        phaseEl.className = 'roadmap-phase';
+        const phaseHead = document.createElement('div');
+        phaseEl.appendChild(phaseHead);
+        phaseHead.className = 'roadmap-phase-title';
+        phaseHead.textContent = phaseLabel;
+        phaseItems.forEach((item) => {
+          const status = String(item.status || 'pending');
+          const row = document.createElement('div');
+          row.className = 'roadmap-item ' + status;
+          row.title = item.objective || item.title || '';
+          row.innerHTML =
+            '<span class="roadmap-item-icon">' + roadmapStatusIcon(status) + '</span>' +
+            '<span class="roadmap-item-text">' + escapeHtml(item.title || '') + '</span>';
+          phaseEl.appendChild(row);
+        });
+        body.appendChild(phaseEl);
+      });
+      details.appendChild(body);
+      wrap.appendChild(details);
+    });
+    chatWindow.appendChild(wrap);
+  }
+
+  // ===== Geçmiş sohbeti geri yükle =====
+  async function loadChatHistory() {
+    try {
+      const resp = await fetch('/chat/history/', { credentials: 'include' });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) return;
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      const runs = (Array.isArray(data.runs) ? data.runs : []).filter((run) =>
+        !(activeProject && isLiveRun(activeProject) &&
+          String(run.run_id) === String(activeProject.last_run_id))
+      );
+      if (!messages.length && !runs.length) return;
+      if (emptyChat) emptyChat.style.display = 'none';
+      messages.forEach((msg) => {
+        if (!msg) return;
+        const content = msg.content == null ? '' : String(msg.content);
+        const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
+        if (!content && attachments.length === 0) return;
+        const row = renderBubble(content, msg.role === 'user' ? 'me' : 'ai', false, '', attachments);
+        if (row) row.classList.add('history');
+      });
+      renderHistoryRoadmaps(runs);
+      if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+    } catch (e) {
+      console.warn('Sohbet geçmişi yüklenemedi:', e);
+    }
+  }
+
+  function restoreActiveProject() {
+    if (!isLiveRun(activeProject)) return;
+    const runId = activeProject.last_run_id;
+    const status = activeProject.last_run_status || '';
+    const bubble = renderBubble('', 'ai');
+    bubble.dataset.runId = runId;
+    createProgressTracker(bubble);
+    ensureStage('connect', 'Bağlantı', '🔌');
+    ensureStage('done', 'Tamamlandı', '✅');
+    addProgressDetail(bubble, 'connect', 'Proje: ' + (activeProject.name || activeProject.id), 'Çalıştırma: ' + runId
+      + (status ? '\nDurum: ' + (PROJECT_STATUS_LABELS[status] || status) : ''), {
+      status: 'done', key: 'reconnect_project', sub: activeProject.name || activeProject.id
+    });
+    addProgressDetail(bubble, 'connect', 'Devam eden çalıştırmaya bağlanılıyor', 'Canlı akışa yeniden bağlanılıyor…', {
+      status: 'active', key: 'reconnect', sub: runId
+    });
+    currentRunId = runId;
+    startRunStream(runId, bubble);
+  }
+
+  function startRunStream(runId, aiBubble) {
+    let accumulatedText = '';
+    let streamClosed = false;
+    const es = new EventSource('/task/stream/' + runId + '/');
+    
+    if (aiBubble) {
+      aiBubble.dataset.runId = runId;
+      aiBubble.classList.add('live');
+    }
+    
+    es.onerror = (err) => {
+      if (streamClosed) return;
+      console.warn('EventSource error (will retry):', err);
+      addProgressDetail(aiBubble, 'connect', 'Bağlantı', 'Akış bağlantısı koptu; yeniden bağlanılıyor...');
+    };
+    
+    es.onmessage = (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        
+        if (data.type === 'status') {
+          if (window._lastStatusText === data.text) return;
+          // RunLogger.stage() hem 'stage' hem 'status' yazar; ayni metni iki kez
+          // gostermemek icin hemen oncesinde gelen stage olayini atla.
+          if (data.stage && data.text === window._lastStageEventText) return;
+          window._lastStatusText = data.text;
+          if (data.progress && typeof data.progress === 'object' && data.progress.currentStage) {
+            ensureStage(data.progress.currentStage, data.progress.currentStage, '📋');
+          }
+          const desc = describeStatusEvent(data);
+          if (desc) {
+            addProgressDetail(aiBubble, getCurrentStageId(), desc.title, desc.detail, {
+              status: desc.status, key: desc.key, sub: desc.sub, kind: desc.kind
+            });
+            if (desc.milestone) {
+              addMilestone(aiBubble, desc.milestone, desc.status === 'active' ? 'active' : 'done');
+            }
+          }
+        } else if (data.type === 'stage') {
+          window._lastStatusText = data.text;
+          window._lastStageEventText = data.text;
+          // Agent sends stage info: {stage, label, icon, text, progress}
+          const stageId = data.stage || normalizeStageId(data.text);
+          const labelText = data.label || stageLabel(stageId);
+          const stageIcon = data.icon || '📋';
+          ensureStage(stageId, labelText, stageIcon);
+          updateProgressStage(aiBubble, stageId, 'active');
+          const isFinal = stageId === 'done';
+          const isError = stageId === 'error' || stageId === 'failed';
+          addProgressDetail(aiBubble, stageId, stageTitle(stageId, labelText), data.text || labelText, {
+            status: isError ? 'error' : isFinal ? 'done' : 'active',
+            key: 'stage:' + stageId,
+            sub: shortText(data.text || labelText, 90),
+          });
+          const milestoneKey = milestoneKeyForStage(stageId, data.text || labelText);
+          if (milestoneKey) {
+            addMilestone(aiBubble, milestoneKey, isError ? 'error' : isFinal ? 'done' : 'active');
+          }
+        } else if (data.type === 'plan') {
+          const total = (data.progress && data.progress.total) || 0;
+          const phases = Array.isArray(data.phases) ? data.phases.length : 0;
+          addProgressDetail(aiBubble, 'planning', 'Plan hazır', `Toplam ${total} kalem${phases ? ', ' + phases + ' faz' : ''}.`, {
+            status: 'done', key: 'plan', sub: total ? total + ' kalem planlandı' : ''
+          });
+          addMilestone(aiBubble, 'plan', 'done');
+        } else if (data.type === 'plan_item') {
+          const itemStatus = data.status === 'failed' ? 'error' : data.status === 'in_progress' ? 'active' : 'done';
+          const phase = data.phase_label || data.phase || '-';
+          const detail = [
+            `Faz: ${phase}`,
+            data.objective || '',
+            (data.files || []).length ? 'Dosyalar: ' + data.files.join(', ') : '',
+            (data.acceptance || []).length ? 'Kabul:\n- ' + data.acceptance.join('\n- ') : '',
+            data.user_requested ? '\n(Bu kalem senin açık isteğin.)' : '',
+          ].filter(Boolean).join('\n');
+          addProgressDetail(aiBubble, getCurrentStageId(), shortText(data.text, 90), detail, {
+            status: itemStatus, key: 'item:' + (data.key || data.text), sub: 'Faz: ' + phase,
+          });
+        } else if (data.type === 'info') {
+          const desc = describeStatusEvent(data) || { title: 'Bilgi', detail: data.text, status: 'done', key: '', sub: '' };
+          addProgressDetail(aiBubble, getCurrentStageId(), desc.title, desc.detail, {
+            status: desc.status, key: desc.key, sub: desc.sub, kind: desc.kind
+          });
+          if (desc.milestone) {
+            addMilestone(aiBubble, desc.milestone, desc.status === 'active' ? 'active' : 'done');
+          }
+        } else if (data.type === 'tool_calls') {
+          try {
+            const calls = JSON.parse(data.text);
+            calls.forEach(call => {
+              const desc = describeToolCall(call.name + '(' + JSON.stringify(call.arguments || {}) + ')');
+              const key = nextToolKey(aiBubble);
+              addProgressDetail(aiBubble, getCurrentStageId(), desc.title, desc.detail, {
+                status: 'active', key: key, sub: desc.sub
+              });
+              if (desc.milestone) addMilestone(aiBubble, desc.milestone, 'active');
+            });
+          } catch(e) {
+            addProgressDetail(aiBubble, getCurrentStageId(), 'Ajan araç çağırıyor', `Veri: ${data.text}`, { status: 'active' });
+          }
+        } else if (data.type === 'tool_call') {
+          const desc = describeToolCall(data.text);
+          const key = nextToolKey(aiBubble);
+          addProgressDetail(aiBubble, getCurrentStageId(), desc.title, desc.detail, {
+            status: 'active', key: key, sub: desc.sub
+          });
+          if (desc.milestone) addMilestone(aiBubble, desc.milestone, 'active');
+        } else if (data.type === 'tool_result') {
+          const toolState = aiBubble ? (bubbleToolKeys.get(aiBubble) || {}) : {};
+          let summary = String(data.text || '');
+          try {
+            const result = JSON.parse(data.text);
+            summary = result.ok === false
+              ? 'Hata: ' + (result.error || JSON.stringify(result))
+              : summarizeToolResult(result);
+          } catch(e) {}
+          const current = toolState.lastKey ? findActivityByKey(aiBubble, toolState.lastKey) : null;
+          if (current) {
+            const detail = String(current.detail || '') + '\n\nSonuç:\n' + summary;
+            addProgressDetail(aiBubble, current.stageId || getCurrentStageId(), current.label, detail, {
+              status: 'done', key: current.key, sub: current.sub
+            });
+          } else {
+            addProgressDetail(aiBubble, getCurrentStageId(), 'Ajan aracı tamamladı', summary, { status: 'done' });
+          }
+        } else if (data.type === 'output') {
+          accumulatedText += data.text;
+          if (aiBubble) {
+            const textEl = aiBubble.querySelector('.bubble-text');
+            if (textEl) {
+              textEl.innerHTML = renderMarkdown(accumulatedText);
+              enhanceCodeBlocks(textEl);
+            }
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+          }
+        } else if (data.type === 'failed') {
+          renderRunFailure(aiBubble, data.error || data.text, accumulatedText);
+          streamClosed = true;
+          es.close();
+        } else if (data.type === 'done') {
+          if (data.ok === false || data.status === 'failed' || data.status === 'cancelled') {
+            renderRunFailure(aiBubble, data.error || data.text || 'Görev tamamlanamadı.', accumulatedText);
+            streamClosed = true;
+            es.close();
+            return;
+          }
+          const finalText = accumulatedText || data.text || 'Görev tamamlandı.';
+          if (aiBubble) {
+            aiBubble.classList.remove('live');
+            const textEl = aiBubble.querySelector('.bubble-text');
+            if (textEl) {
+              textEl.innerHTML = renderMarkdown(finalText);
+              enhanceCodeBlocks(textEl);
+            }
+            ensureStage('done', 'Tamamlandı', '✅');
+            updateProgressStage(aiBubble, 'done', 'done');
+            addMilestone(aiBubble, 'done', 'done');
+            addProgressDetail(aiBubble, 'done', 'Görev tamamlandı', `Toplam çıktı: ${finalText.length} karakter`, {
+              status: 'done', key: 'finished', sub: 'Tüm adımlar bitti'
+            });
+          }
+          if (!accumulatedText) {
+            fetchRunText(runId).then(fullText => {
+              if (!fullText || !aiBubble) return;
+              const textEl = aiBubble.querySelector('.bubble-text');
+              if (textEl) {
+                textEl.innerHTML = renderMarkdown(fullText);
+                enhanceCodeBlocks(textEl);
+              }
+            });
+          }
+          stopPreviewPolling();
+          setTimeout(() => startPreviewForTask(runId), 1200);
+          streamClosed = true;
+          currentRunId = null;
+          es.close(); refreshQueue();
+        } else if (data.type === 'heartbeat') {
+        } else if (data.type === 'exception') {
+          addMilestone(aiBubble, 'error', 'error');
+          addProgressDetail(aiBubble, getCurrentStageId(), 'Hata: ' + shortText(data.text, 70), data.text, {
+            status: 'error', key: 'exception:' + Date.now()
+          });
+        } else if (data.type === 'agent_status') {
+          handleAgentStatus(data);
+        }
+      } catch(e) {}
+    };
+  }
+
+  // Helper: ensure a stage exists in the dynamic list
+  function ensureStage(stageId, label, icon) {
+    if (!progressStages.find(s => s.id === stageId)) {
+      progressStages.push({ id: stageId, label, icon });
+      document.querySelectorAll('.bubble-progress').forEach(tracker => renderProgressSteps(tracker));
+    }
+  }
+
+  // Helper: get current active stage ID
+  function getCurrentStageId() {
+    if (currentProgressStage >= 0 && currentProgressStage < progressStages.length) {
+      return progressStages[currentProgressStage].id;
+    }
+    return 'connect';
+  }
+
+  // ===== Agent Status UI =====
+  const agentBubbles = new Map(); // agent_id -> bubble element
+
+  function handleAgentStatus(data) {
+    const { agent, status, task, progress, stage, text } = data;
+    if (!agent) return;
+
+    let bubble = agentBubbles.get(agent);
+    const now = new Date();
+    const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+    if (!bubble) {
+      // Create new agent bubble
+      bubble = createAgentBubble(agent, data);
+      agentBubbles.set(agent, bubble);
+      chatWindow.appendChild(bubble);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    } else {
+      // Update existing bubble
+      updateAgentBubble(bubble, agent, data, time);
+    }
+
+    // Update agent filter in tracker
+    updateAgentFilter(agent);
+  }
+
+  function createAgentBubble(agent, data) {
+    const { status, task, progress, stage, text, icon } = data;
+    const now = new Date();
+    const time = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+    const icons = {
+      orchestrator: '🎯',
+      planning: '📝',
+      worker: '⚙️'
+    };
+    const agentIcon = icons[agent.split('_')[0]] || '🤖';
+    const statusColors = {
+      idle: 'var(--fg-muted)',
+      planning: 'var(--accent)',
+      running: 'var(--accent)',
+      completed: 'var(--success)',
+      failed: 'var(--error)',
+      error: 'var(--error)'
+    };
+    const statusColor = statusColors[status] || 'var(--fg-muted)';
+
+    const row = document.createElement('div');
+    row.className = 'agent-bubble';
+    row.dataset.agent = agent;
+    row.innerHTML = `
+      <div class="agent-avatar" style="background:${statusColor}22;color:${statusColor};">${agentIcon}</div>
+      <div class="agent-content">
+        <div class="agent-header">
+          <span class="agent-name">${agent}</span>
+          <span class="agent-time">${time}</span>
+          <span class="agent-status" style="color:${statusColor};">${status}</span>
+        </div>
+        <div class="agent-task">${text || task || ''}</div>
+        ${stage ? `<div class="agent-stage">Stage: ${stage}</div>` : ''}
+        ${progress !== undefined ? `
+          <div class="agent-progress">
+            <div class="agent-progress-bar" style="width:${progress}%"></div>
+            <span class="agent-progress-text">${progress}%</span>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    return row;
+  }
+
+  function updateAgentBubble(bubble, agent, data, time) {
+    const { status, task, progress, stage, text, icon } = data;
+    const statusColors = {
+      idle: 'var(--fg-muted)',
+      planning: 'var(--accent)',
+      running: 'var(--accent)',
+      completed: 'var(--success)',
+      failed: 'var(--error)',
+      error: 'var(--error)'
+    };
+    const statusColor = statusColors[status] || 'var(--fg-muted)';
+
+    bubble.dataset.status = status;
+    const avatar = bubble.querySelector('.agent-avatar');
+    if (avatar) {
+      avatar.style.background = statusColor + '22';
+      avatar.style.color = statusColor;
+    }
+    const statusEl = bubble.querySelector('.agent-status');
+    if (statusEl) {
+      statusEl.textContent = status;
+      statusEl.style.color = statusColor;
+    }
+    const timeEl = bubble.querySelector('.agent-time');
+    if (timeEl) timeEl.textContent = time;
+    const taskEl = bubble.querySelector('.agent-task');
+    if (taskEl) taskEl.textContent = text || task || '';
+    const stageEl = bubble.querySelector('.agent-stage');
+    if (stage) {
+      if (!stageEl) {
+        const newStageEl = document.createElement('div');
+        newStageEl.className = 'agent-stage';
+        newStageEl.textContent = 'Stage: ' + stage;
+        bubble.querySelector('.agent-content').appendChild(newStageEl);
+      } else {
+        stageEl.textContent = 'Stage: ' + stage;
+      }
+    } else if (stageEl) {
+      stageEl.remove();
+    }
+    const progressEl = bubble.querySelector('.agent-progress');
+    if (progress !== undefined) {
+      if (!progressEl) {
+        const newProgressEl = document.createElement('div');
+        newProgressEl.className = 'agent-progress';
+        newProgressEl.innerHTML = `
+          <div class="agent-progress-bar" style="width:${progress}%"></div>
+          <span class="agent-progress-text">${progress}%</span>
+        `;
+        bubble.querySelector('.agent-content').appendChild(newProgressEl);
+      } else {
+        progressEl.querySelector('.agent-progress-bar').style.width = progress + '%';
+        progressEl.querySelector('.agent-progress-text').textContent = progress + '%';
+      }
+    } else if (progressEl) {
+      progressEl.remove();
+    }
+  }
+
+  // Agent filter in tracker
+  const activeAgentFilter = null;
+
+  function updateAgentFilter(agent) {
+    const filterContainer = document.getElementById('agent-filter-container');
+    if (!filterContainer) return;
+
+    let btn = filterContainer.querySelector(`[data-agent="${agent}"]`);
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.className = 'agent-filter-btn';
+      btn.dataset.agent = agent;
+      btn.innerHTML = `<span class="agent-filter-icon">${getAgentIcon(agent)}</span> ${agent}`;
+      btn.onclick = () => toggleAgentFilter(agent);
+      filterContainer.appendChild(btn);
+    }
+    // Update active state
+    const activeBtn = filterContainer.querySelector('.agent-filter-btn.active');
+    if (activeBtn) activeBtn.classList.remove('active');
+    if (activeAgentFilter === agent) {
+      btn.classList.add('active');
+    }
+  }
+
+  function getAgentIcon(agent) {
+    const base = agent.split('_')[0];
+    const icons = { orchestrator: '🎯', planning: '📝', worker: '⚙️' };
+    return icons[base] || '🤖';
+  }
+
+  function toggleAgentFilter(agent) {
+    // Implementation for filtering tracker by agent
+    const btn = document.querySelector(`#agent-filter-container [data-agent="${agent}"]`);
+    if (!btn) return;
+
+    if (activeAgentFilter === agent) {
+      activeAgentFilter = null;
+      btn.classList.remove('active');
+    } else {
+      activeAgentFilter = agent;
+      document.querySelectorAll('#agent-filter-container .agent-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    filterTrackerByAgent(activeAgentFilter);
+  }
+
+  function filterTrackerByAgent(agent) {
+    const tracker = document.getElementById('bubble-steps-content');
+    if (!tracker) return;
+
+    if (!agent) {
+      tracker.querySelectorAll('.progress-step, .progress-detail-item, .plan-stepper-item').forEach(el => {
+        el.style.display = '';
+      });
+      return;
+    }
+
+    // Filter logic - show only items related to this agent
+    tracker.querySelectorAll('.progress-step, .progress-detail-item').forEach(el => {
+      const itemAgent = el.dataset.agent || (el.closest('[data-agent]')?.dataset.agent);
+      el.style.display = (itemAgent === agent) ? '' : 'none';
+    });
+  }
+
+  // ===== Bubble Steps Panel Handler =====
+  let activeBubbleForSteps = null;
+
+  function showBubbleStepsPanel(bubbleRow, stageId = null) {
+    const panel = document.getElementById('bubble-steps-panel');
+    const content = panel && panel.querySelector('#bubble-steps-content');
+    if (!panel || !content) return;
+    if (!bubbleRow) bubbleRow = window._planBubble || document.querySelector('.bubble.ai');
+
+    // Kalıcı seçim varsa o aşamayı göster; yoksa stageId (tek seferlik) veya tümü
+    const sel = selectedStage || stageId;
+
+    // Paneli daha önce asılı olduğu balondan çıkar
+    const prevParent = panel.parentElement;
+    if (prevParent) prevParent.removeChild(panel);
+
+    content.innerHTML = '';
+
+    const planPanel = document.getElementById('global-plan-panel');
+
+    // 0) Aşama stepper'ı — gizli plan panelinden klonla (başlıksız)
+    const stepperSrc = planPanel ? planPanel.querySelector('.plan-stepper') : null;
+    if (stepperSrc && stepperSrc.children.length > 0) {
+      const stepWrap = document.createElement('div');
+      stepWrap.className = 'plan-stepper todo-stepper';
+      stepWrap.innerHTML = stepperSrc.innerHTML;
+      stepWrap.querySelectorAll('.plan-stepper-item').forEach(it => { it.style.cursor = 'pointer'; });
+      content.appendChild(stepWrap);
+    }
+
+    // Çerçeve: kürelerin altından inen sol+sağ iki dikey çizgi;
+    // log satırları ve görev listesi bu çerçevenin içinde tek bütün görünür.
+    const frame = document.createElement('div');
+    frame.className = 'steps-frame';
+    let frameHasLines = false;
+
+    // 1) Yapılan işlemler (adımlar) — aşamalara GRUPLANIR (başlıksız), çerçevenin içinde
+    if (bubbleRow) {
+      const body = bubbleRow.querySelector('.step-body') || bubbleRow.querySelector('.bubble-content');
+      const detailEls = body ? Array.from(body.querySelectorAll('.progress-detail-item, .step-detail, .plan-step-detail')) : [];
+      if (detailEls.length > 0) {
+        const groupsWrap = document.createElement('div');
+        groupsWrap.className = 'stage-groups todo-section';
+        const buckets = new Map();
+        PIPELINE_STAGES.forEach(st => buckets.set(st.id, []));
+        detailEls.forEach(detailEl => {
+          const sid = normalizeStageId(detailEl.dataset.stage || 'start') || 'start';
+          if (!buckets.has(sid)) buckets.set(sid, []);
+          buckets.get(sid).push(detailEl);
+        });
+        // Başlık yok (icon + ad + adet çipi kaldırıldı) — yalnızca satırlar kalır
+        const makeGroup = (id, items) => {
+          const sec = document.createElement('div');
+          sec.className = 'stage-group' + (id === currentStepStage ? ' current' : '');
+          sec.dataset.stage = id;
+          const body = document.createElement('div');
+          body.className = 'stage-group-body';
+          items.forEach(detailEl => {
+            const clone = detailEl.cloneNode(true);
+            clone.style.cursor = 'default';
+            clone.style.marginTop = '8px';
+            clone.style.padding = '10px 12px';
+            body.appendChild(clone);
+          });
+          sec.appendChild(body);
+          return sec;
+        };
+
+        const rendered = new Set();
+        PIPELINE_STAGES.forEach(st => {
+          // Seçim varsa yalnızca seçilen aşamanın öğeleri gösterilsin
+          if (sel && st.id !== sel) return;
+          const items = buckets.get(st.id) || [];
+          if (!items.length) return;
+          rendered.add(st.id);
+          groupsWrap.appendChild(makeGroup(st.id, items));
+        });
+        // Pipeline dışı aşamalar (failed, subagent_pipeline, gelecekteki yeni adlar) asla düşmesin
+        buckets.forEach((items, id) => {
+          if (!items.length || rendered.has(id)) return;
+          if (sel && id !== sel) return;
+          groupsWrap.appendChild(makeGroup(id, items));
+        });
+        if (groupsWrap.children.length) {
+          frame.appendChild(groupsWrap);
+          frameHasLines = true;
+        }
+      }
+    }
+
+    // 2) Yapılacaklar listesi (plan öğeleri) — başlıksız
+    const planItems = planPanel ? planPanel.querySelectorAll('.plan-item') : [];
+    if (planItems.length > 0) {
+      const listWrap = document.createElement('div');
+      listWrap.className = 'todo-list todo-section';
+      planItems.forEach(item => {
+        const clone = item.cloneNode(true);
+        clone.style.cursor = 'default';
+        const detail = item.nextElementSibling;
+        listWrap.appendChild(clone);
+        if (detail && detail.classList.contains('plan-detail')) {
+          const dClone = detail.cloneNode(true);
+          dClone.style.display = 'none';
+          listWrap.appendChild(dClone);
+        }
+      });
+      // Log satırları ile görev listesi arasına yatay çizgi (çerçevenin alt bağı)
+      if (frameHasLines) {
+        const divider = document.createElement('div');
+        divider.className = 'frame-divider';
+        frame.appendChild(divider);
+      }
+      frame.appendChild(listWrap);
+    }
+
+    // Çerçeve HER ZAMAN oluşur (boş olsa bile) — kürenin altındaki
+    // bağlayan dikey çizgiler asla kaybolmasın
+    if (!frame.children.length) {
+      const empty = document.createElement('div');
+      empty.className = 'todo-empty';
+      empty.textContent = 'Henüz yapılacaklar listesi yok.';
+      frame.appendChild(empty);
+    }
+    content.appendChild(frame);
+
+    // Agent filter container
+    const filterContainer = document.createElement('div');
+    filterContainer.id = 'agent-filter-container';
+    filterContainer.style.cssText = 'display:flex;gap:6px;padding:8px 0;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:8px;';
+    content.insertBefore(filterContainer, content.firstChild);
+
+    // Seçili aşama varsa: o küreyi active yap, ilgili gruba kaydır
+    if (sel) {
+      const grp = content.querySelector(`.stage-group[data-stage="${CSS.escape(sel)}"]`);
+      if (grp) grp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      content.querySelectorAll('.plan-stepper-item').forEach(it => {
+        it.classList.toggle('active', it.dataset.stage === sel);
+      });
+    }
+
+    // Paneli balonun ALTINA ayrı satır olarak yerleştir (halka sadece mesajı sarsın)
+    bubbleRow.appendChild(panel);
+    panel.style.display = 'flex';
+    activeBubbleForSteps = bubbleRow;
+    bubbleRow.classList.add('panel-open');
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  let currentPreviewUrl = '';
+  let previewPollingTimer = null;
+  let previewInitialized = false;
+
+  async function startPreviewForTask(runId, attempt = 1) {
+    try {
+      if (attempt === 1) {
+        const resp = await fetch('/preview/start/', {
+          method: 'POST', credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({})
+        });
+        const data = await resp.json();
+        if (data.ok && data.url) {
+          const firstLoad = !previewInitialized;
+          currentPreviewUrl = data.url;
+          previewInitialized = true;
+          loadPreviewInPanel(data.url, firstLoad);
+          startPreviewPolling(runId);
+          return;
+        }
+        if (data.error) showPreviewMessage(data.error);
+      }
+      const autoResp = await fetch('/preview/auto/', { credentials: 'include' });
+      const autoData = await autoResp.json();
+      if (autoData.ok && autoData.url) {
+        const firstLoad = !previewInitialized;
+        currentPreviewUrl = autoData.url;
+        previewInitialized = true;
+        loadPreviewInPanel(autoData.url, firstLoad);
+        startPreviewPolling(runId);
+        return;
+      }
+      if (autoData.error && attempt >= 3) showPreviewMessage(autoData.error);
+    } catch (e) {
+      if (attempt >= 3) showPreviewMessage('Önizleme bağlantısı kurulamadı: ' + String(e));
+    }
+    if (attempt <= 8) setTimeout(() => startPreviewForTask(runId, attempt + 1), 3000);
+  }
+
+  function loadPreviewInPanel(url, focus) {
+    const frame = $('preview-frame');
+    const placeholder = $('preview-placeholder');
+    if (frame) {
+      frame.src = url;
+      frame.style.display = 'block';
+      if (placeholder) placeholder.style.display = 'none';
+    }
+    setPreviewStartVisible(false);
+    if (focus) {
+      try { switchPanel('preview'); } catch (e) {}
+    }
+  }
+
+  function showPreviewMessage(message) {
+    const placeholder = $('preview-placeholder');
+    if (!placeholder) return;
+    placeholder.innerHTML = '<div style="max-width:420px;text-align:center;line-height:1.5;">'
+      + '<div style="font-size:24px;margin-bottom:8px;">🖼️</div>'
+      + '<div>' + escapeHtml(String(message || 'Önizleme hazır değil.')) + '</div></div>';
+    placeholder.style.display = 'flex';
+    // Preview çalışmıyorsa "Preview Başlat" butonunu göster.
+    setPreviewStartVisible(true);
+  }
+
+  // ===== Preview başlatma (yeniden girişte preview yoksa) =====
+  function currentProjectIdForPreview() {
+    const params = new URLSearchParams(window.location.search);
+    return (activeProject && (activeProject.id || activeProject.guid))
+      || params.get('project')
+      || params.get('project_id')
+      || '';
+  }
+
+  function setPreviewStartVisible(visible) {
+    const btn = $('preview-start-btn');
+    if (!btn) return;
+    btn.style.display = visible ? 'inline-flex' : 'none';
+  }
+
+  async function startPreviewManually() {
+    const btn = $('preview-start-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Başlatılıyor…'; }
+    // Kullanıcı isteği: basınca buton görünürlükten çıksın.
+    setPreviewStartVisible(false);
+
+    const projectId = currentProjectIdForPreview();
+    let lastError = '';
+    try {
+      const resp = await fetch('/preview/start/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ project_id: projectId || null })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (data.ok && data.url) {
+        currentPreviewUrl = data.url;
+        previewInitialized = true;
+        loadPreviewInPanel(data.url, true);
+        startPreviewPolling(activeProject ? (activeProject.last_run_id || '') : '');
+        return;
+      }
+      lastError = data.error || '';
+    } catch (e) {
+      lastError = String(e);
+    }
+
+    // Dev sunucusu yeni başlıyor olabilir: birkaç kez otomatik kontrol et.
+    for (let i = 0; i < 8; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      try {
+        const autoUrl = '/preview/auto/' + (projectId ? '?project_id=' + encodeURIComponent(projectId) : '');
+        const auto = await fetch(autoUrl, { credentials: 'include' }).then((r) => r.json());
+        if (auto.ok && auto.url) {
+          currentPreviewUrl = auto.url;
+          previewInitialized = true;
+          loadPreviewInPanel(auto.url, true);
+          startPreviewPolling(activeProject ? (activeProject.last_run_id || '') : '');
+          return;
+        }
+        if (auto.error) lastError = auto.error;
+      } catch (e) {
+        lastError = String(e);
+      }
+    }
+
+    // Başlatılamadıysa tekrar denenebilsin diye butonu geri getir.
+    if (btn) { btn.disabled = false; btn.textContent = 'Preview Başlat'; }
+    setPreviewStartVisible(true);
+    showPreviewMessage(lastError || 'Preview başlatılamadı.');
+    showToast('Preview başlatılamadı: ' + (lastError || 'bilinmeyen hata'), 'error');
+  }
+
+  async function restorePreviewIfAvailable() {
+    const projectId = currentProjectIdForPreview();
+    if (!projectId) {
+      setPreviewStartVisible(false);
+      return;
+    }
+    try {
+      const autoUrl = '/preview/auto/?project_id=' + encodeURIComponent(projectId);
+      const auto = await Promise.race([
+        fetch(autoUrl, { credentials: 'include' }).then((r) => r.json()),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: 'timeout' }), 3000))
+      ]);
+      if (auto.ok && auto.url) {
+        currentPreviewUrl = auto.url;
+        previewInitialized = true;
+        loadPreviewInPanel(auto.url, false);
+      } else {
+        // Proje var ama preview hazır değil → başlat butonunu göster.
+        setPreviewStartVisible(true);
+      }
+    } catch (e) {
+      setPreviewStartVisible(true);
+    }
+  }
+
+  function startPreviewPolling(runId) {
+    stopPreviewPolling();
+    previewPollingTimer = setInterval(async () => {
+      try {
+        const resp = await fetch('/preview/auto/', { credentials: 'include' });
+        const data = await resp.json();
+        if (data.ok && data.url) {
+          if (data.url !== currentPreviewUrl) {
+            currentPreviewUrl = data.url;
+            const frame = $('preview-frame');
+            if (frame) frame.src = data.url;
+          }
+        }
+      } catch (e) {}
+    }, 4000);
+  }
+
+  function stopPreviewPolling() {
+    if (previewPollingTimer) {
+      clearInterval(previewPollingTimer);
+      previewPollingTimer = null;
+    }
+  }
+
+  // ===== WhatsApp project integration (GitHub'ın altındaki kart) =====
+  async function loadProjectWhatsApp() {
+    const card = document.getElementById('whatsapp-project-card');
+    const statusEl = document.getElementById('whatsapp-status');
+    const configEl = document.getElementById('whatsapp-project-config');
+    if (!card || !statusEl) return;
+    const projectId = activeProject && (activeProject.id || activeProject.guid);
+    if (!projectId) {
+      statusEl.textContent = 'Proje seçilmedi';
+      statusEl.classList.remove('connected');
+      if (configEl) configEl.style.display = 'none';
+      return;
+    }
+    try {
+      const res = await fetch('/projects/api/' + encodeURIComponent(projectId) + '/integrations/whatsapp/', {credentials: 'include'});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'WhatsApp ayarları yüklenemedi');
+      const cfg = data.integration || {};
+      const conn = data.connection || {};
+      if (document.getElementById('whatsapp-recipient')) document.getElementById('whatsapp-recipient').value = cfg.recipient || '';
+      if (document.getElementById('whatsapp-enabled')) document.getElementById('whatsapp-enabled').checked = !!cfg.enabled;
+      if (document.getElementById('whatsapp-notify-complete')) document.getElementById('whatsapp-notify-complete').checked = cfg.notify_on_complete !== false;
+      if (document.getElementById('whatsapp-notify-error')) document.getElementById('whatsapp-notify-error').checked = cfg.notify_on_error !== false;
+      if (configEl) configEl.style.display = 'flex';
+      if (!conn.connected) {
+        statusEl.textContent = 'WhatsApp bağlı değil — önce WhatsApp’ı bağla';
+        statusEl.classList.remove('connected');
+      } else if (cfg.enabled && cfg.recipient) {
+        statusEl.textContent = 'Raporlar: ' + cfg.recipient;
+        statusEl.classList.add('connected');
+      } else {
+        statusEl.textContent = 'Bağlı — alıcı ve rapor ayarını kaydet';
+        statusEl.classList.add('connected');
+      }
+    } catch (e) {
+      statusEl.textContent = 'Ayarlar yüklenemedi';
+      statusEl.classList.remove('connected');
+      console.warn('WhatsApp integration:', e);
+    }
+  }
+
+  async function saveProjectWhatsApp() {
+    const projectId = activeProject && (activeProject.id || activeProject.guid);
+    if (!projectId) { showToast('Önce bir proje seç', 'error'); return; }
+    const recipient = (document.getElementById('whatsapp-recipient')?.value || '').trim();
+    const enabled = !!document.getElementById('whatsapp-enabled')?.checked;
+    if (enabled && !recipient) { showToast('Alıcı WhatsApp numarasını gir', 'error'); return; }
+    try {
+      const res = await fetch('/projects/api/' + encodeURIComponent(projectId) + '/integrations/whatsapp/', {
+        method: 'POST', credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          recipient,
+          enabled,
+          notify_on_complete: !!document.getElementById('whatsapp-notify-complete')?.checked,
+          notify_on_error: !!document.getElementById('whatsapp-notify-error')?.checked,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Kaydedilemedi');
+      showToast('WhatsApp rapor ayarı kaydedildi', 'success');
+      await loadProjectWhatsApp();
+    } catch (e) {
+      showToast('WhatsApp ayarı kaydedilemedi: ' + e.message, 'error');
+    }
+  }
+
+  async function testProjectWhatsApp() {
+    const projectId = activeProject && (activeProject.id || activeProject.guid);
+    if (!projectId) { showToast('Önce bir proje seç', 'error'); return; }
+    try {
+      const res = await fetch('/projects/api/' + encodeURIComponent(projectId) + '/integrations/whatsapp/test/', {
+        method: 'POST', credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.detail || data.error || 'Test gönderilemedi');
+      showToast('WhatsApp test mesajı gönderildi', 'success');
+    } catch (e) {
+      showToast('WhatsApp testi: ' + e.message, 'error');
+    }
+  }
+
+  document.getElementById('whatsapp-save')?.addEventListener('click', saveProjectWhatsApp);
+  document.getElementById('whatsapp-test')?.addEventListener('click', testProjectWhatsApp);
+
+  // ===== Inline Queue Badge =====
+  async function refreshQueue() {
+    try {
+      const [queueResp, tasksResp] = await Promise.all([ fetch('/queue/list/'), fetch('/tasks/list/') ]);
+      const queueData = await queueResp.json(); const tasksData = await tasksResp.json();
+      renderInlineQueue(queueData.queue || [], tasksData.tasks || []);
+    } catch(e) { console.warn('Failed to refresh queue:', e); }
+  }
+
+  function renderInlineQueue(queue, tasks) {
+    const badge = $('integrations-badge');
+    if (badge) { badge.textContent = queue.length; badge.style.display = queue.length ? 'inline-flex' : 'none'; }
+    const statusEl = $('queue-status');
+    if (statusEl) { statusEl.textContent = queue.length ? queue.length + ' queued' : 'empty'; }
+  }
+
+  async function clearQueue() {
+    try {
+      const resp = await fetch('/queue/clear/', {
+        method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'}
+      });
+      const data = await resp.json();
+      if (data.ok) { refreshQueue(); showToast('Kuyruk temizlendi', 'success'); }
+    } catch(e) { showToast('Kuyruk temizlenemedi: ' + e, 'error'); }
+  }
+
+  // ===== Tools: Filetree / dosya editörü =====
+  function toolsFileIcon(name) {
+    const ext = String(name || '').split('.').pop().toLowerCase();
+    const icons = {
+      py: '🐍', js: '📜', mjs: '📜', cjs: '📜', ts: '📘', tsx: '⚛️', jsx: '⚛️',
+      html: '🌐', htm: '🌐', css: '🎨', scss: '🎨', sass: '🎨', json: '📋',
+      md: '📝', txt: '📄', yml: '⚙️', yaml: '⚙️', toml: '⚙️', sql: '🗄️',
+      png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️',
+      ico: '🖼️', lock: '🔒', env: '🔑', sh: '💻', bat: '💻', ps1: '💻',
+    };
+    if (String(name || '').toLowerCase() === 'dockerfile') return '🐳';
+    return icons[ext] || '📄';
+  }
+
+  function toolsJoinPath(parent, name) {
+    return parent ? parent.replace(/\/+$/, '') + '/' + name : name;
+  }
+
+  async function toolsFetchTree(path) {
+    const url = '/tools/file-tree/' + (path ? '?path=' + encodeURIComponent(path) : '');
+    const res = await fetch(url, { credentials: 'include' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Dosya ağacı yüklenemedi');
+    return data;
+  }
+
+  function toolsRenderTree(tree, parentPath, container) {
+    const names = Object.keys(tree || {});
+    names.sort((a, b) => {
+      const aDir = (tree[a] || {}).type === 'directory';
+      const bDir = (tree[b] || {}).type === 'directory';
+      if (aDir !== bDir) return aDir ? -1 : 1;
+      return a.localeCompare(b, 'tr');
+    });
+    if (!names.length) {
+      container.innerHTML = '<div class="tools-tree-empty">Bu klasör boş.</div>';
+      return;
+    }
+    const ul = document.createElement('ul');
+    ul.className = 'tools-tree';
+    names.forEach((name) => {
+      const entry = tree[name] || {};
+      const isDir = entry.type === 'directory';
+      const rel = toolsJoinPath(parentPath, name);
+      const li = document.createElement('li');
+      li.className = 'tools-tree-item';
+      li.dataset.path = rel;
+      li.dataset.type = isDir ? 'dir' : 'file';
+      li.dataset.name = String(name).toLowerCase();
+      if (isDir) {
+        li.innerHTML = '<div class="tools-tree-row" data-toggle="1">'
+          + '<button type="button" class="tools-tree-toggle" aria-expanded="false">▸</button>'
+          + '<span class="icon">📁</span><span class="name">' + escapeHtml(name) + '</span></div>'
+          + '<div class="tools-tree-children"></div>';
+      } else {
+        li.innerHTML = '<div class="tools-tree-row" data-file="1">'
+          + '<span class="icon">' + toolsFileIcon(name) + '</span>'
+          + '<span class="name">' + escapeHtml(name) + '</span></div>';
+      }
+      ul.appendChild(li);
+    });
+    container.innerHTML = '';
+    container.appendChild(ul);
+  }
+
+  async function openToolsFile(path) {
+    const editor = $('tools-editor');
+    const textarea = $('tools-editor-content');
+    const pathEl = $('tools-editor-path');
+    const statusEl = $('tools-editor-status');
+    if (!editor || !textarea) return;
+    editor.classList.add('open');
+    textarea.disabled = true;
+    textarea.value = '';
+    if (pathEl) pathEl.textContent = path;
+    if (statusEl) statusEl.textContent = 'yükleniyor…';
+    try {
+      const res = await fetch('/tools/read-file/?path=' + encodeURIComponent(path), { credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Dosya okunamadı');
+      textarea.value = data.content || '';
+      textarea.disabled = false;
+      if (statusEl) statusEl.textContent = 'hazır';
+      textarea.focus();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'hata';
+      showToast('Dosya okunamadı: ' + (e.message || e), 'error');
+    }
+  }
+
+  async function saveToolsFile() {
+    const pathEl = $('tools-editor-path');
+    const textarea = $('tools-editor-content');
+    const statusEl = $('tools-editor-status');
+    const path = pathEl ? pathEl.textContent.trim() : '';
+    if (!path || !textarea) return;
+    if (statusEl) statusEl.textContent = 'kaydediliyor…';
+    try {
+      const res = await fetch('/tools/write-file/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ path: path, content: textarea.value })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Dosya kaydedilemedi');
+      if (statusEl) statusEl.textContent = 'kaydedildi';
+      showToast('Dosya kaydedildi', 'success');
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'hata';
+      showToast('Kaydetme hatası: ' + (e.message || e), 'error');
+    }
+  }
+
+  function toolsBindTree(container) {
+    if (!container || container.dataset.treeBound === '1') return;
+    container.dataset.treeBound = '1';
+    container.addEventListener('click', async (e) => {
+      const row = e.target.closest('.tools-tree-row');
+      const item = row ? row.closest('.tools-tree-item') : null;
+      if (!row || !item) return;
+      const path = item.dataset.path || '';
+      if (item.dataset.type === 'dir') {
+        const childrenEl = item.querySelector(':scope > .tools-tree-children');
+        const toggle = row.querySelector('.tools-tree-toggle');
+        if (!childrenEl) return;
+        if (item.dataset.loaded !== '1') {
+          childrenEl.innerHTML = '<div class="tools-tree-loading">Yükleniyor…</div>';
+          try {
+            const data = await toolsFetchTree(path);
+            toolsRenderTree(data.tree || {}, path, childrenEl);
+            item.dataset.loaded = '1';
+          } catch (err) {
+            childrenEl.innerHTML = '<div class="tools-tree-empty">' + escapeHtml(err.message || String(err)) + '</div>';
+            return;
+          }
+        }
+        const open = childrenEl.classList.toggle('expanded');
+        if (toggle) {
+          toggle.classList.toggle('open', open);
+          toggle.textContent = open ? '▾' : '▸';
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+      } else {
+        container.querySelectorAll('.tools-tree-row.selected').forEach((el) => el.classList.remove('selected'));
+        row.classList.add('selected');
+        openToolsFile(path);
+      }
+    });
+  }
+
+  async function loadToolsTree(path) {
+    const container = $('tools-tree-content');
+    if (!container) return;
+    const nameEl = $('tools-project-name');
+    if (nameEl) nameEl.textContent = activeProject ? (activeProject.name || activeProject.id) : 'Proje Seçili Değil';
+    if (!activeProject) {
+      container.innerHTML = '<div class="tools-tree-empty">Proje seçilmedi. Önce Projeler sayfasından bir proje aç.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="tools-tree-loading">Dosya ağacı yükleniyor…</div>';
+    try {
+      toolsBindTree(container);
+      const data = await toolsFetchTree(path || '');
+      toolsRenderTree(data.tree || {}, path || '', container);
+      const search = $('tools-search');
+      if (search) search.style.display = 'inline-block';
+      window._toolsTreeLoaded = true;
+    } catch (e) {
+      container.innerHTML = '<div class="tools-tree-empty">' + escapeHtml(e.message || String(e)) + '</div>';
+      showToast('Dosya ağacı yüklenemedi: ' + (e.message || e), 'error');
+    }
+  }
+
+  function filterToolsTree(query) {
+    const container = $('tools-tree-content');
+    if (!container) return;
+    const q = String(query || '').toLowerCase().trim();
+    container.querySelectorAll('.tools-tree-item').forEach((li) => {
+      const name = li.dataset.name || '';
+      li.style.display = (!q || name.includes(q)) ? '' : 'none';
+    });
+  }
+
+  // ===== Panel Switching =====
+  function switchPanel(panelName) {
+    document.querySelectorAll('.panel').forEach(p => { p.classList.toggle('active', p.id === 'panel-' + panelName); });
+    document.querySelectorAll('.panel-tab').forEach(t => { const isActive = t.dataset.panel === panelName; t.classList.toggle('active', isActive); t.setAttribute('aria-selected', isActive); });
+    if (panelName === 'tools') {
+      const nameEl = $('tools-project-name');
+      if (nameEl) nameEl.textContent = activeProject ? (activeProject.name || activeProject.id) : 'Proje Seçili Değil';
+    }
+    if (panelName === 'integrations') {
+      loadProjectWhatsApp();
+    }
+    if (panelName === 'preview') {
+      // Preview sekmesi açıldığında henüz bir URL yüklenmemişse başlat butonunu göster.
+      const frame = $('preview-frame');
+      const hasSrc = frame && frame.src && frame.src !== 'about:blank';
+      if (!hasSrc) setPreviewStartVisible(true);
+    }
+    if (panelName === 'neural') {
+      if (typeof loadNeuralStatus === 'function') loadNeuralStatus();
+      if (typeof loadNeuralRuns === 'function') loadNeuralRuns();
+      if (typeof loadNeuralGoals === 'function') loadNeuralGoals();
+    }
+  }
+  window.switchPanel = switchPanel;
+  window.switchToPreview = () => switchPanel('preview');
+
+  // ===== User Presence =====
+  // Presence kalp atışı base.html'de tüm sayfalar için çalışır.
+
+  // Panel tab click delegation
+  document.addEventListener('click', (e) => {
+    const tab = e.target.closest('.panel-tab');
+    if (tab && tab.dataset.panel) { switchPanel(tab.dataset.panel); }
+  });
+
+  // Close button for bubble steps panel
+  const stepsCloseBtn = document.querySelector('.bubble-steps-close');
+  if (stepsCloseBtn) {
+    stepsCloseBtn.addEventListener('click', () => {
+      const panel = document.getElementById('bubble-steps-panel');
+      if (panel) panel.style.display = 'none';
+      activeBubbleForSteps = null;
+    });
+  }
+
+  // ===== Initialization =====
+  const chatAttachBtn = $('chat-attach-btn');
+  const chatAttachInput = $('chat-attach-input');
+  const chatAttachmentsPreview = $('chat-attachments-preview');
+  if (chatAttachBtn && chatAttachInput) {
+    chatAttachBtn.addEventListener('click', () => chatAttachInput.click());
+    chatAttachInput.addEventListener('change', () => {
+      addPendingFiles(chatAttachInput.files);
+      chatAttachInput.value = '';
+    });
+  }
+  if (chatAttachmentsPreview) {
+    chatAttachmentsPreview.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-remove-attach]');
+      if (!btn) return;
+      removePendingAttachment(btn.getAttribute('data-remove-attach'));
+    });
+  }
+
+  const toolsFiletreeBtn = $('tools-filetree-btn');
+  if (toolsFiletreeBtn) toolsFiletreeBtn.addEventListener('click', () => loadToolsTree(''));
+  const toolsRefreshBtn = $('tools-refresh-btn');
+  if (toolsRefreshBtn) toolsRefreshBtn.addEventListener('click', () => loadToolsTree(''));
+  const toolsSearch = $('tools-search');
+  if (toolsSearch) toolsSearch.addEventListener('input', () => filterToolsTree(toolsSearch.value));
+  const toolsSaveBtn = $('tools-editor-save');
+  if (toolsSaveBtn) toolsSaveBtn.addEventListener('click', saveToolsFile);
+  const toolsEditorClose = $('tools-editor-close');
+  if (toolsEditorClose) {
+    toolsEditorClose.addEventListener('click', () => {
+      const ed = $('tools-editor');
+      if (ed) ed.classList.remove('open');
+    });
+  }
+
+  // /chat/?panel=tools&view=filetree ile doğrudan dosya ağacını aç
+  const bootParams = new URLSearchParams(window.location.search);
+  const bootPanel = bootParams.get('panel');
+  if (bootPanel) switchPanel(bootPanel);
+  if (bootParams.get('view') === 'filetree') {
+    switchPanel('tools');
+    setTimeout(() => loadToolsTree(''), 150);
+  }
+
+  const previewRefreshBtn = $('preview-refresh-btn');
+  if (previewRefreshBtn) {
+    previewRefreshBtn.addEventListener('click', () => {
+      const frame = $('preview-frame');
+      if (!frame || !frame.src || frame.src === 'about:blank') return;
+      try {
+        frame.contentWindow.location.reload();
+      } catch (e) {
+        // Cross-origin iframe: src'i yeniden atayarak yenile
+        frame.src = frame.src;
+      }
+    });
+  }
+
+  const previewStartBtn = $('preview-start-btn');
+  if (previewStartBtn) previewStartBtn.addEventListener('click', startPreviewManually);
+
+  // Preview iframe boş bir sayfa yüklediyse "Preview Başlat" butonunu göster.
+  const previewFrameEl = $('preview-frame');
+  if (previewFrameEl) {
+    previewFrameEl.addEventListener('load', () => {
+      if (!previewFrameEl.src || previewFrameEl.src === 'about:blank') return;
+      try {
+        const doc = previewFrameEl.contentDocument;
+        if (!doc) return; // cross-origin: kontrol edilemez
+        const body = doc.body;
+        const text = body ? (body.innerText || '').trim() : '';
+        if (!text && (!body || body.children.length === 0)) {
+          setPreviewStartVisible(true);
+        }
+      } catch (e) {}
+    });
+  }
+
+  // ===== Neural Core (embedded in chat) =====
+  async function neuralApi(url, opts = {}) {
+    const res = await fetch(url, {
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json', 'X-CSRFToken': CSRF_TOKEN || '', ...(opts.headers || {}) },
+      ...opts,
+    });
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json() : { ok: res.ok, text: await res.text() };
+    if (!res.ok || data.ok === false) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+    return data;
+  }
+
+  async function loadNeuralStatus() {
+    const el = $('neural-status');
+    if (!el) return;
+    try {
+      const data = await neuralApi('/api/neural/status/');
+      el.textContent = JSON.stringify(data, null, 2);
+    } catch (e) {
+      el.textContent = 'Durum alınamadı: ' + (e.message || e);
+    }
+  }
+
+  async function loadNeuralRuns() {
+    const el = $('neural-runs');
+    if (!el) return;
+    try {
+      const data = await neuralApi('/api/neural/runs/');
+      const runs = data.runs || data.items || [];
+      if (!runs.length) { el.innerHTML = '<span class="muted">Henüz çalışma yok.</span>'; return; }
+      el.innerHTML = runs.slice(0, 10).map(r => {
+        const status = escapeHtml(r.status || 'unknown');
+        const mode = escapeHtml(r.mode || '');
+        const goal = escapeHtml((r.goal || r.prompt || '').toString().slice(0, 120));
+        const id = escapeHtml((r.id || '').toString().slice(0, 8));
+        return `<div style="padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;"><div><strong>${id}</strong> <span class="badge">${status}</span> <span class="muted">${mode}</span></div><div style="margin-top:4px;color:var(--fg-muted);">${goal || '(hedef yok)'}</div></div>`;
+      }).join('');
+    } catch (e) {
+      el.textContent = 'Çalışmalar alınamadı: ' + (e.message || e);
+    }
+  }
+
+  async function loadNeuralGoals() {
+    const el = $('neural-goals');
+    if (!el) return;
+    try {
+      const data = await neuralApi('/api/neural/goals/');
+      const goals = data.goals || data.items || [];
+      if (!goals.length) { el.innerHTML = '<span class="muted">Otonom hedef yok.</span>'; return; }
+      el.innerHTML = goals.slice(0, 20).map(g => {
+        const title = escapeHtml(g.title || g.name || '(başlıksız)');
+        const enabled = g.enabled ? 'aktif' : 'pasif';
+        const id = escapeHtml((g.id || '').toString());
+        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;"><div><div><strong>${title}</strong></div><div class="muted" style="font-size:12px;">${enabled} • ${id.slice(0,8)}</div></div><button class="btn btn-ghost btn-sm" data-neural-goal-toggle="${id}">${g.enabled ? 'Durdur' : 'Başlat'}</button></div>`;
+      }).join('');
+      el.querySelectorAll('[data-neural-goal-toggle]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          try {
+            await neuralApi(`/api/neural/goals/${btn.dataset.neuralGoalToggle}/toggle/`, { method: 'POST' });
+            loadNeuralGoals();
+          } catch (e) { showToast('Hedef güncellenemedi: ' + e.message, 'error'); }
+        });
+      });
+    } catch (e) {
+      el.textContent = 'Hedefler alınamadı: ' + (e.message || e);
+    }
+  }
+
+  async function createNeuralRun() {
+    const goal = ($('neural-goal')?.value || '').trim();
+    const mode = $('neural-mode')?.value || 'full';
+    const msg = $('neural-run-msg');
+    if (!goal) { showToast('Neural hedef gerekli.', 'warning'); return; }
+    if (msg) msg.textContent = 'Çalıştırılıyor...';
+    try {
+      const data = await neuralApi('/api/neural/run/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal, mode })
+      });
+      if (msg) msg.textContent = 'Çalışma başlatıldı.';
+      showToast('Neural run başlatıldı.', 'success');
+      loadNeuralStatus();
+      loadNeuralRuns();
+    } catch (e) {
+      if (msg) msg.textContent = 'Hata: ' + e.message;
+      showToast('Neural run hatası: ' + e.message, 'error');
+    }
+  }
+
+  async function addNeuralGoal() {
+    const title = ($('neural-goal-title')?.value || '').trim();
+    if (!title) { showToast('Hedef başlığı gerekli.', 'warning'); return; }
+    try {
+      await neuralApi('/api/neural/goals/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title })
+      });
+      $('neural-goal-title').value = '';
+      showToast('Otonom hedef eklendi.', 'success');
+      loadNeuralGoals();
+    } catch (e) {
+      showToast('Hedef eklenemedi: ' + e.message, 'error');
+    }
+  }
+
+  $('neural-refresh-btn')?.addEventListener('click', loadNeuralStatus);
+  $('neural-runs-refresh-btn')?.addEventListener('click', loadNeuralRuns);
+  $('neural-goals-refresh-btn')?.addEventListener('click', loadNeuralGoals);
+  $('neural-run-btn')?.addEventListener('click', createNeuralRun);
+  $('neural-goal-add-btn')?.addEventListener('click', addNeuralGoal);
+
+  // Auto-open Neural tab when redirected as /chat/?neural=1
+  try {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get('neural') === '1') {
+      setTimeout(() => switchPanel('neural'), 0);
+    }
+  } catch (e) {}
+
+  refreshQueue();
+  setInterval(refreshQueue, 5000);
+
+  if (!localStorage.getItem('chat_onboarding_dismissed')) {
+    const banner = document.getElementById('onboarding-banner');
+    if (banner) banner.style.display = 'flex';
+  }
+
+  loadChatHistory().finally(() => {
+    if (activeProject) {
+      updateActiveProjectStatus(activeProject.status);
+      restoreActiveProject();
+    }
+    loadProjectWhatsApp();
+    restorePreviewIfAvailable();
+  });
+
+  // Input auto-resize
+  chatInput?.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 140) + 'px'; });
+  chatForm?.addEventListener('submit', async (e) => { e.preventDefault(); await sendMessage(); });
+  chatInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+
+  console.log('CHAT.HTML IIFE COMPLETED');
+})();
+</script>
+{{ block.super }}
+{% endblock %}
