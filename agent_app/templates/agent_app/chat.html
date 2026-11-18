@@ -2326,7 +2326,8 @@
       }
 
       typingEl.remove();
-      aiBubble = renderBubble(j.reply || '', 'ai');
+      const respAttachments = Array.isArray(j.attachments) ? j.attachments : (Array.isArray(j.media) ? j.media : []);
+      aiBubble = renderBubble(j.reply || '', 'ai', false, '', respAttachments);
       if (j.intent === 'build' || j.intent === 'execute') {
           createProgressTracker(aiBubble);
       }
@@ -2336,6 +2337,28 @@
         refreshQueue();
         if (j.intent === 'execute') startPreviewForTask(j.run_id);
       }
+      // Media/job polling (video/image/3D generation results)
+      try {
+        const pendingJobs = [];
+        if (Array.isArray(j.pending_jobs)) pendingJobs.push(...j.pending_jobs);
+        if (j.job && j.job.id && j.job.kind) {
+          const st = String(j.job.status || '').toLower();
+          if (!['completed', 'failed', 'error', 'cancelled', 'canceled'].includes(st)) {
+            if (!pendingJobs.find(p => String(p.id) === String(j.job.id))) pendingJobs.push(j.job);
+          }
+        }
+        if (Array.isArray(respAttachments)) {
+          respAttachments.forEach(att => {
+            if (!att || !att.job_id || !att.job_kind) return;
+            const st = String(att.status || '').toLowerCase();
+            if (['completed', 'failed', 'error', 'cancelled', 'canceled', 'ready'].includes(st) && att.download_url) return;
+            if (!pendingJobs.find(p => String(p.id) === String(att.job_id))) {
+              pendingJobs.push({ id: att.job_id, kind: att.job_kind, status: att.status, poll_url: att.poll_url });
+            }
+          });
+        }
+        if (pendingJobs.length) startChatJobPolling(pendingJobs);
+      } catch (pollErr) { console.warn('job polling init failed', pollErr); }
     } catch(e) {
       typingEl.remove();
       console.error('[sendMessage] Error:', e);
@@ -2748,6 +2771,106 @@
       return progressStages[currentProgressStage].id;
     }
     return 'connect';
+  }
+
+  // ===== Chat media job polling (video/image/3D) =====
+  const _chatPolledJobs = new Set();
+  function _jobPollUrl(job) {
+    if (job && job.poll_url) return String(job.poll_url);
+    const kind = String(job && (job.kind || job.job_kind) || '').toLowerCase();
+    const id = String(job && (job.id || job.job_id) || '');
+    if (!id) return '';
+    if (kind === 'video') return '/api/video/' + encodeURIComponent(id) + '/';
+    if (kind === 'image') return '/api/image/' + encodeURIComponent(id) + '/';
+    if (kind === '3d' || kind === 'scene' || kind === 'scene_generation') return '/api/3d-jobs/' + encodeURIComponent(id) + '/';
+    return '';
+  }
+  function _extractJobPayload(kind, data) {
+    if (!data || typeof data !== 'object') return data || {};
+    if (kind === 'video') return data.job || data.video || data.data || data;
+    if (kind === 'image') return data.job || data.image || data.data || data;
+    if (kind === '3d' || kind === 'scene' || kind === 'scene_generation') return data.job || data.data || data;
+    return data.job || data;
+  }
+  function _jobToAttachment(kind, job) {
+    if (!job) return null;
+    const st = String(job.status || '').toLowerCase();
+    const id = String(job.id || job.job_id || '');
+    const att = {
+      type: kind === 'video' ? 'video' : (kind === 'image' ? 'image' : '3d_model'),
+      kind: kind === '3d' ? '3d_model' : kind,
+      name: job.name || job.prompt || (kind + ' sonucu'),
+      status: job.status || 'pending',
+      job_id: id,
+      job_kind: kind,
+    };
+    if (kind === 'video') {
+      if (job.download_url) { att.download_url = job.download_url; att.url = job.download_url; }
+      else if (id && job.output_path) { att.download_url = '/api/video/' + id + '/download/'; att.url = att.download_url; }
+      if (job.thumbnail || job.thumbnail_path) att.thumbnail = job.thumbnail || job.thumbnail_path;
+    } else if (kind === 'image') {
+      if (job.download_url) { att.download_url = job.download_url; att.url = job.download_url; }
+      else if (id && job.output_path) { att.download_url = '/api/image/' + id + '/download/'; att.url = att.download_url; }
+      if (job.thumbnail || job.thumbnail_path) att.thumbnail = job.thumbnail || job.thumbnail_path;
+    } else {
+      // 3D job: prefer output asset URL, else scene context
+      const sceneId = job.scene_id || (job.scene && job.scene.id) || null;
+      const assetUrl = job.output_asset_url || (job.output_asset && (job.output_asset.url || job.output_asset.file_url)) || '';
+      const assetId = job.output_asset_id || (job.output_asset && (job.output_asset.id || job.output_asset)) || '';
+      const nodeId = job.output_node_id || (job.output_node && (job.output_node.id || job.output_node)) || '';
+      if (assetUrl) { att.download_url = assetUrl; att.url = assetUrl; }
+      if (assetId) att.asset_id = String(assetId);
+      if (nodeId) att.node_id = String(nodeId);
+      if (sceneId) { att.scene_id = String(sceneId); att.studio_url = '/studio/?scene=' + encodeURIComponent(String(sceneId)); }
+      // even without direct file url, show card with studio link when placed
+      if (!att.url && sceneId) att.studio_url = '/studio/?scene=' + encodeURIComponent(String(sceneId));
+    }
+    return att;
+  }
+  function startChatJobPolling(jobs) {
+    (jobs || []).forEach(job => {
+      const kind = String(job.kind || job.job_kind || '').toLowerCase();
+      const id = String(job.id || job.job_id || '');
+      if (!kind || !id) return;
+      const key = kind + ':' + id;
+      if (_chatPolledJobs.has(key)) return;
+      _chatPolledJobs.add(key);
+      const url = _jobPollUrl({ id, kind, poll_url: job.poll_url });
+      if (!url) return;
+      let attempts = 0;
+      const maxAttempts = 180; // ~6 minutes @2s
+      const timer = setInterval(async () => {
+        attempts++;
+        try {
+          const resp = await fetch(url, { credentials: 'include' });
+          const data = await resp.json().catch(() => ({}));
+          const payload = _extractJobPayload(kind, data);
+          const status = String((payload && payload.status) || (data && data.status) || '').toLowerCase();
+          if (status === 'completed') {
+            clearInterval(timer);
+            const att = _jobToAttachment(kind, payload || data);
+            if (att) {
+              const label = kind === 'video' ? 'Video hazır' : (kind === 'image' ? 'Görsel hazır' : '3D sonuç hazır');
+              renderBubble(label + '.', 'ai', false, '', [att]);
+            } else {
+              renderBubble('İş tamamlandı.', 'ai');
+            }
+          } else if (['failed', 'error', 'cancelled', 'canceled'].includes(status)) {
+            clearInterval(timer);
+            const err = (payload && (payload.error || payload.message)) || (data && data.error) || 'İş başarısız oldu.';
+            renderBubble('İşlem başarısız: ' + String(err), 'ai', true);
+          } else if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            renderBubble('İşlem hala devam ediyor. Durumu Studio veya ilgili bölümden takip edebilirsiniz.', 'ai');
+          }
+        } catch (e) {
+          if (attempts >= maxAttempts) {
+            clearInterval(timer);
+            renderBubble('İşlem durumu alınamadı; lütfen daha sonra kontrol edin.', 'ai', true);
+          }
+        }
+      }, 2000);
+    });
   }
 
   // ===== Agent Status UI =====

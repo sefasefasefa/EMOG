@@ -2265,6 +2265,88 @@ def assistant_message(request):
         except Exception as exc:
             logger.debug("chat eki node baglantisi guncellenemedi: %s", exc)
 
+    # Pending action (mandatory user choice) resolution / clarification.
+    # Must run before intent routing and without guessing (no auto scene/target selection).
+    try:
+        from agent_app import chat_media as chat_media_mod
+        pending_handled = chat_media_mod.try_handle_pending_action(conversation, user, raw_message)
+        if pending_handled and pending_handled.get("handled"):
+            reply_text = str(pending_handled.get("reply") or "")
+            handled_atts = pending_handled.get("attachments") or pending_handled.get("media") or []
+            assistant_meta = {"attachments": handled_atts} if handled_atts else None
+            _append_chat_message(conversation, "assistant", reply_text, meta_data=assistant_meta)
+            if pending_handled.get("ok"):
+                _remember_conversation(conversation, last_intent="chat", last_topic=(raw_message or "")[:1000])
+            payload = {
+                "ok": bool(pending_handled.get("ok", True)),
+                "intent": pending_handled.get("intent") or "chat",
+                "reply": reply_text,
+                "attachments": handled_atts or saved_chat_attachments,
+                "media": handled_atts or [],
+                "conversation_id": str(conversation.id),
+                "pending_action": pending_handled.get("pending_action"),
+                "needs_user_choice": bool(pending_handled.get("needs_user_choice")),
+                "result": pending_handled.get("result"),
+            }
+            for k in ("job", "jobs", "pending_jobs"):
+                if k in pending_handled:
+                    payload[k] = pending_handled.get(k)
+            return JsonResponse(payload)
+    except Exception as exc:
+        logger.warning("pending action handling error: %s", exc)
+
+    # Ambiguous 3D upload: ask user where to place/store (no guessing, no placement).
+    if saved_chat_attachments:
+        try:
+            from agent_app import chat_media as chat_media_mod
+            pending_resp = chat_media_mod.maybe_create_3d_upload_pending_action(
+                conversation, user, saved_chat_attachments, user_message=raw_message
+            )
+            if pending_resp:
+                reply_text = str(pending_resp.get("reply") or "")
+                _append_chat_message(conversation, "assistant", reply_text)
+                _remember_conversation(conversation, last_intent="chat", last_topic=(raw_message or "")[:1000])
+                return JsonResponse({
+                    "ok": bool(pending_resp.get("ok", True)),
+                    "intent": "chat",
+                    "reply": reply_text,
+                    "attachments": pending_resp.get("attachments") or saved_chat_attachments,
+                    "conversation_id": str(conversation.id),
+                    "pending_action": pending_resp.get("pending_action"),
+                    "needs_user_choice": bool(pending_resp.get("needs_user_choice", True)),
+                })
+        except Exception as exc:
+            logger.warning("3d upload pending action error: %s", exc)
+
+    # Direct chat-driven generation intents (image/video/3D). 3D generation will ask for scene/placement choice.
+    try:
+        from agent_app import chat_media as chat_media_mod
+        gen_resp = chat_media_mod.maybe_handle_chat_generation(conversation, user, raw_message)
+        if gen_resp:
+            reply_text = str(gen_resp.get("reply") or "")
+            # For completed media results, persist assistant message with media attachments when appropriate
+            assistant_meta = None
+            media_atts = gen_resp.get("attachments") or gen_resp.get("media") or []
+            if media_atts:
+                assistant_meta = {"attachments": media_atts}
+            _append_chat_message(conversation, "assistant", reply_text, meta_data=assistant_meta)
+            _remember_conversation(conversation, last_intent="chat", last_topic=(raw_message or "")[:1000])
+            payload = {
+                "ok": bool(gen_resp.get("ok", True)),
+                "intent": "chat",
+                "reply": reply_text,
+                "attachments": media_atts or saved_chat_attachments,
+                "media": media_atts or [],
+                "conversation_id": str(conversation.id),
+            }
+            # pass-through useful fields (pending/job polling)
+            for k in ("pending_action", "needs_user_choice", "job", "jobs", "pending_jobs", "result"):
+                if k in gen_resp:
+                    payload[k] = gen_resp.get(k)
+            return JsonResponse(payload)
+    except Exception as exc:
+        logger.warning("chat generation handling error: %s", exc)
+
     # "devam et" / "continue" gibi kisa mesajlar: niyet router'a gitmeden once
     # yarim kalmis/başarisiz son gorevi bul ve ayni projede yeniden baslat.
     continuation_request = _is_continuation_message(raw_message) if 'raw_message' in locals() else _is_continuation_message(message)
