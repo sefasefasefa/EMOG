@@ -20,6 +20,7 @@ from .video_page_view import video_page
 from .whatsapp_views import WhatsAppPairView
 from .neural_core import views as neural_views
 from . import video_views
+from . import image_views
 
 from .auth_views import (
     login_page, register_page, oauth_login, oauth_callback,
@@ -127,6 +128,12 @@ urlpatterns = [
     path('api/video/<str:job_id>/edit/', video_views.video_edit, name='video_edit'),
     path('api/video/<str:job_id>/', video_views.video_detail, name='video_detail'),
     path('api/video/', video_views.video_list, name='video_list'),
+
+    # Image generation API
+    path('api/image/generate/', image_views.image_generate, name='image_generate'),
+    path('api/image/<str:job_id>/download/', image_views.image_download, name='image_download'),
+    path('api/image/<str:job_id>/', image_views.image_detail, name='image_detail'),
+    path('api/image/', image_views.image_list, name='image_list'),
     
     # Auth routes
     # Eski Django varsayılanıyla gelen bağlantılar için uyumluluk yönlendirmesi.
