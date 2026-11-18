@@ -147,3 +147,40 @@ class ImageApiTests(TestCase):
             self.assertEqual(resp.status_code, 403, resp.content)
             data = resp.json()
             self.assertEqual(data.get("code"), "feature_disabled")
+
+    def test_download_rejects_relative_traversal_output_path(self):
+        job = self._create_completed_job(user=self.user, prompt="traversal")
+        job.output_path = "../outside-secret.png"
+        job.save(update_fields=["output_path"])
+
+        self._auth(self.user)
+        resp = self.client.get(f"/api/image/{job.id}/download/")
+        self.assertEqual(resp.status_code, 403, resp.content)
+        data = resp.json()
+        self.assertFalse(data.get("ok", True))
+        self.assertIn(data.get("code"), {"invalid_path", "traversal"})
+
+    def test_download_rejects_escaped_absolute_output_path(self):
+        job = self._create_completed_job(user=self.user, prompt="escaped")
+        escaped = str((self.media_root.parent / "escaped-outside-media.png").resolve())
+        job.output_path = escaped
+        job.save(update_fields=["output_path"])
+
+        self._auth(self.user)
+        resp = self.client.get(f"/api/image/{job.id}/download/")
+        self.assertEqual(resp.status_code, 403, resp.content)
+        data = resp.json()
+        self.assertFalse(data.get("ok", True))
+        self.assertIn(data.get("code"), {"invalid_path", "traversal"})
+
+    def test_download_rejects_windows_style_traversal_output_path(self):
+        job = self._create_completed_job(user=self.user, prompt="win traversal")
+        job.output_path = r"..\..\outside-secret.png"
+        job.save(update_fields=["output_path"])
+
+        self._auth(self.user)
+        resp = self.client.get(f"/api/image/{job.id}/download/")
+        self.assertEqual(resp.status_code, 403, resp.content)
+        data = resp.json()
+        self.assertFalse(data.get("ok", True))
+        self.assertIn(data.get("code"), {"invalid_path", "traversal"})
