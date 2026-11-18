@@ -3,7 +3,7 @@ from django.views.generic import RedirectView
 
 from .views import index, runs_page, omni_health, omni_models, nvidia_models
 from .views import start_task, assistant_message, task_logs, task_stream
-from .views import build_run_detail, search_providers, chat_history
+from .views import build_run_detail, search_providers, chat_history, chat_attachment_download
 from .views import queue_list, tasks_list, tasks_page, runs_list, user_presence, queue_clear, queue_clear_all
 from .views import tools_file_tree, tools_read_file, tools_write_file, tools_run_command
 from .views import preview_analyze_design, preview_visual_qa, preview_proxy, preview_auto, preview_static, preview_set_dev_port, preview_all_active, preview_assign_port, preview_free_ports
@@ -21,6 +21,7 @@ from .whatsapp_views import WhatsAppPairView
 from .neural_core import views as neural_views
 from . import video_views
 from . import image_views
+from . import scene_views
 
 from .auth_views import (
     login_page, register_page, oauth_login, oauth_callback,
@@ -46,6 +47,7 @@ urlpatterns = [
     # Otonom proje uretimi (buildkit)
     path('build/run/<str:run_id>/', build_run_detail, name='build_run_detail'),
     path('chat/history/', chat_history, name='chat_history'),
+    path('api/chat/attachments/<str:att_id>/download/', chat_attachment_download, name='chat_attachment_download'),
     path('build/providers/', search_providers, name='search_providers'),
 
     # Kuyruk / görev / koşu listeleri
@@ -173,6 +175,29 @@ urlpatterns = [
     
     # Video generation Page
     path('video/', video_page, name='video_page'),
+
+    # 3D Scene Studio (MVP)
+    path('studio/', scene_views.studio_page, name='studio_page'),
+    path('api/scenes/', scene_views.scenes_api, name='scenes_api'),
+    path('api/scenes/<str:scene_id>/', scene_views.scene_detail_api, name='scene_detail_api'),
+    path('api/scenes/<str:scene_id>/assets/', scene_views.scene_assets_api, name='scene_assets_api'),
+    path('api/scenes/<str:scene_id>/nodes/', scene_views.scene_nodes_api, name='scene_nodes_api'),
+    path('api/scenes/<str:scene_id>/nodes/<str:node_id>/', scene_views.scene_node_detail_api, name='scene_node_detail_api'),
+    path('api/scenes/<str:scene_id>/nodes/<str:node_id>/action/', scene_views.scene_node_action_api, name='scene_node_action_api'),
+    path('api/scenes/<str:scene_id>/timeline/', scene_views.scene_timeline_api, name='scene_timeline_api'),
+    path('api/scenes/<str:scene_id>/timeline/state/', scene_views.scene_timeline_state_api, name='scene_timeline_state_api'),
+    path('api/entity-classes/', scene_views.entity_classes_api, name='entity_classes_api'),
+    path('api/entity-classes/research/', scene_views.entity_class_research_api, name='entity_class_research_api'),
+    path('api/entity-classes/<str:class_id>/research/', scene_views.entity_class_research_api, name='entity_class_research_detail_api'),
+    path('api/entity-classes/<str:class_id>/instantiate/', scene_views.instantiate_entity_class_api, name='instantiate_entity_class_api'),
+    path('api/entity-classes/<str:class_id>/', scene_views.entity_class_detail_api, name='entity_class_detail_api'),
+    path('api/generation-providers/', scene_views.generation_providers_api, name='generation_providers_api'),
+    path('api/3d-jobs/', scene_views.scene_generation_jobs_api, name='scene_generation_jobs_api'),
+    path('api/3d-jobs/<str:job_id>/', scene_views.scene_generation_job_detail_api, name='scene_generation_job_detail_api'),
+    path('api/3d-jobs/<str:job_id>/run/', scene_views.scene_generation_job_run_api, name='scene_generation_job_run_api'),
+    path('api/learned-knowledge/entities/', scene_views.learned_entity_knowledge_api, name='learned_entity_knowledge_api'),
+    path('api/learned-knowledge/entities/<str:knowledge_id>/', scene_views.learned_entity_knowledge_detail_api, name='learned_entity_knowledge_detail_api'),
+    path('api/learned-knowledge/video/', scene_views.learned_video_knowledge_api, name='learned_video_knowledge_api'),
 
     # WhatsApp Page
     path('whatsapp/', whatsapp_page, name='whatsapp_page'),
