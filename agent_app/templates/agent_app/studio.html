@@ -1,5 +1,5 @@
-﻿{% extends "agent_app/base.html" %}
-{% block title %}3D Studio â€” EMOG{% endblock %}
+{% extends "agent_app/base.html" %}
+{% block title %}3D Studio — EMOG{% endblock %}
 
 {% block head %}
 <style>
@@ -75,8 +75,8 @@
   <div id="studio-tab-3d" class="studio-tab-panel">
   <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
     <div>
-      <h1 style="margin:0;font-size:1.4rem;">3D Sahne StÃ¼dyosu (MVP)</h1>
-      <p class="muted" style="margin:4px 0 0;">Obje/sahne/iskelet veri modeli + glTF gÃ¶rÃ¼ntÃ¼leyici (her yÃ¶nden bakÄ±ÅŸ)</p>
+      <h1 style="margin:0;font-size:1.4rem;">3D Sahne Stüdyosu (MVP)</h1>
+      <p class="muted" style="margin:4px 0 0;">Obje/sahne/iskelet veri modeli + glTF görüntüleyici (her yönden bakış)</p>
     </div>
     <div class="studio-row" style="margin:0;">
       <button class="btn btn-secondary btn-sm" id="btn-refresh">Yenile</button>
@@ -87,18 +87,18 @@
   <div class="studio-wrap">
     <aside class="studio-panel">
       <h2>Sahneler</h2>
-      <ul class="studio-list" id="scene-list"><li class="muted">YÃ¼kleniyor...</li></ul>
+      <ul class="studio-list" id="scene-list"><li class="muted">Yükleniyor...</li></ul>
 
-      <h3>VarlÄ±k SÄ±nÄ±flarÄ± (Class â†’ 3D â†’ Sahne)</h3>
-      <p class="muted" style="margin:0 0 8px;">SÄ±nÄ±f seÃ§ â†’ dÃ¼zenle/Ã¼ret â†’ 3D render â†’ sahneye yerleÅŸtir. (identity.locked_fields kimlik korumasÄ±)</p>
+      <h3>Varlık Sınıfları (Class → 3D → Sahne)</h3>
+      <p class="muted" style="margin:0 0 8px;">Sınıf seç → düzenle/üret → 3D render → sahneye yerleştir. (identity.locked_fields kimlik koruması)</p>
       <div class="studio-row">
-        <button class="btn btn-secondary btn-sm" id="btn-new-class">Yeni SÄ±nÄ±f</button>
-        <button class="btn btn-primary btn-sm" id="btn-research-new-class">AraÅŸtÄ±r & Ã–ÄŸren (Yeni)</button>
-        <button class="btn btn-secondary btn-sm" id="btn-reload-classes">SÄ±nÄ±flarÄ± Yenile</button>
+        <button class="btn btn-secondary btn-sm" id="btn-new-class">Yeni Sınıf</button>
+        <button class="btn btn-primary btn-sm" id="btn-research-new-class">Araştır & Öğren (Yeni)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-reload-classes">Sınıfları Yenile</button>
       </div>
-      <div id="class-list" class="studio-list"><li class="muted">YÃ¼kleniyor...</li></div>
+      <div id="class-list" class="studio-list"><li class="muted">Yükleniyor...</li></div>
       <div id="class-editor" style="margin-top:10px;display:none;border-top:1px solid var(--border);padding-top:10px;">
-        <h4 style="margin:0 0 8px;font-size:0.9rem;">SÄ±nÄ±f DÃ¼zenleyici</h4>
+        <h4 style="margin:0 0 8px;font-size:0.9rem;">Sınıf Düzenleyici</h4>
         <div class="field"><label>Ad</label><input id="ce-name" type="text"></div>
         <div class="field"><label>Kategori</label>
           <select id="ce-category">
@@ -107,42 +107,42 @@
             <option value="environment">environment</option><option value="camera">camera</option><option value="light">light</option><option value="other">other</option>
           </select>
         </div>
-        <div class="field"><label>AÃ§Ä±klama</label><input id="ce-desc" type="text"></div>
+        <div class="field"><label>Açıklama</label><input id="ce-desc" type="text"></div>
         <div class="field"><label>Parametreler (JSON)</label><textarea id="ce-params" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
-        <div class="field"><label>BileÅŸen Åžablonu (JSON: identity/transform/mesh/skeleton/animation/physics/render)</label><textarea id="ce-components" rows="5" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
-        <div class="field"><label>Ä°skelet Åžablonu (JSON)</label><textarea id="ce-skeleton" rows="4" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
-        <div class="field"><label>Render Åžablonu (JSON)</label><textarea id="ce-render" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Bileşen Şablonu (JSON: identity/transform/mesh/skeleton/animation/physics/render)</label><textarea id="ce-components" rows="5" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>İskelet Şablonu (JSON)</label><textarea id="ce-skeleton" rows="4" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Render Şablonu (JSON)</label><textarea id="ce-render" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
         <div class="studio-row">
           <button class="btn btn-primary btn-sm" id="btn-save-class">Kaydet</button>
           <button class="btn btn-secondary btn-sm" id="btn-delete-class">Sil</button>
-          <button class="btn btn-secondary btn-sm" id="btn-instantiate-class">Ãœret & YerleÅŸtir</button>
-          <button class="btn btn-secondary btn-sm" id="btn-research-class">AraÅŸtÄ±r & Ã–ÄŸren (GÃ¼ncelle)</button>
+          <button class="btn btn-secondary btn-sm" id="btn-instantiate-class">Üret & Yerleştir</button>
+          <button class="btn btn-secondary btn-sm" id="btn-research-class">Araştır & Öğren (Güncelle)</button>
         </div>
         <div id="ce-meta" class="muted"></div>
         <pre id="ce-knowledge" class="muted" style="margin-top:6px;white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;"></pre>
       </div>
 
-      <h3>VarlÄ±k (glTF/GLB) YÃ¼kle</h3>
+      <h3>Varlık (glTF/GLB) Yükle</h3>
       <div class="field">
         <label>Dosya</label>
         <input type="file" id="asset-file" accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp">
       </div>
       <div class="field">
         <label>Ad (opsiyonel)</label>
-        <input type="text" id="asset-name" placeholder="Model adÄ±">
+        <input type="text" id="asset-name" placeholder="Model adı">
       </div>
-      <button class="btn btn-primary btn-sm" id="btn-upload-asset">YÃ¼kle ve Sahneye Ekle</button>
-      <p class="muted" style="margin-top:6px;">SeÃ§ili sahneye glTF/glb yÃ¼kler; mesh node olarak eklenir.</p>
+      <button class="btn btn-primary btn-sm" id="btn-upload-asset">Yükle ve Sahneye Ekle</button>
+      <p class="muted" style="margin-top:6px;">Seçili sahneye glTF/glb yükler; mesh node olarak eklenir.</p>
 
-      <h3>SeÃ§ili Sahne Bilgisi</h3>
-      <div id="scene-meta" class="muted">Sahne seÃ§ilmedi.</div>
+      <h3>Seçili Sahne Bilgisi</h3>
+      <div id="scene-meta" class="muted">Sahne seçilmedi.</div>
 
-      <h3>DÃ¼ÄŸÃ¼mler (Nodes)</h3>
-      <div id="node-list" class="node-tree muted">Sahne seÃ§ilmedi.</div>
+      <h3>Düğümler (Nodes)</h3>
+      <div id="node-list" class="node-tree muted">Sahne seçilmedi.</div>
       <div id="node-editor" style="margin-top:10px;display:none;border-top:1px solid var(--border);padding-top:10px;">
-        <h4 style="margin:0 0 8px;font-size:0.9rem;">Node DÃ¼zenleyici</h4>
+        <h4 style="margin:0 0 8px;font-size:0.9rem;">Node Düzenleyici</h4>
         <div class="field"><label>Ad</label><input id="ne-name" type="text"></div>
-        <div class="field"><label>GÃ¶rÃ¼nÃ¼r</label><select id="ne-visible"><option value="true">Evet</option><option value="false">HayÄ±r</option></select></div>
+        <div class="field"><label>Görünür</label><select id="ne-visible"><option value="true">Evet</option><option value="false">Hayır</option></select></div>
         <div class="field"><label>Transform (JSON: position/rotation/scale)</label><textarea id="ne-transform" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
         <div class="field"><label>Identity (JSON, locked_fields dahil)</label><textarea id="ne-identity" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
         <div class="field"><label>Skeleton (JSON)</label><textarea id="ne-skeleton" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
@@ -150,23 +150,23 @@
         <div class="field"><label>Physics (JSON)</label><textarea id="ne-physics" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
         <div class="studio-row">
           <button class="btn btn-primary btn-sm" id="btn-save-node">Kaydet</button>
-          <button class="btn btn-secondary btn-sm" id="btn-dup-node">Ã‡oÄŸalt</button>
+          <button class="btn btn-secondary btn-sm" id="btn-dup-node">Çoğalt</button>
           <button class="btn btn-secondary btn-sm" id="btn-delete-node">Sil</button>
         </div>
         <div class="field" style="margin-top:8px;"><label>Eylem / Pose Preset (animasyon/fizik)</label>
           <select id="ne-action">
-            <option value="idle">idle (Bekle / pose sÄ±fÄ±rla)</option>
-            <option value="walk">walk (YÃ¼rÃ¼)</option>
-            <option value="run">run (KoÅŸ)</option>
-            <option value="raise_arm">raise_arm (Kol kaldÄ±r)</option>
+            <option value="idle">idle (Bekle / pose sıfırla)</option>
+            <option value="walk">walk (Yürü)</option>
+            <option value="run">run (Koş)</option>
+            <option value="raise_arm">raise_arm (Kol kaldır)</option>
             <option value="wave">wave (El salla)</option>
-            <option value="jump">jump (ZÄ±pla)</option>
-            <option value="crouch">crouch (Ã‡Ã¶mel)</option>
-            <option value="turn_left">turn_left (Sola dÃ¶n)</option>
-            <option value="turn_right">turn_right (SaÄŸa dÃ¶n)</option>
-            <option value="swing_sword">swing_sword (KÄ±lÄ±Ã§la vur)</option>
+            <option value="jump">jump (Zıpla)</option>
+            <option value="crouch">crouch (Çömel)</option>
+            <option value="turn_left">turn_left (Sola dön)</option>
+            <option value="turn_right">turn_right (Sağa dön)</option>
+            <option value="swing_sword">swing_sword (Kılıçla vur)</option>
           </select>
-          <small class="muted">Eylem uygulanÄ±r; detaylÄ± poz/fizik iÃ§in JSON alanlarÄ±nÄ± dÃ¼zenleyip Kaydet veya Keyframe Yakala kullanÄ±n. (Poz verisi bileÅŸenlerde saklanÄ±r; statik mesh Ã¶nizlemede transform uygulanÄ±r.)</small>
+          <small class="muted">Eylem uygulanır; detaylı poz/fizik için JSON alanlarını düzenleyip Kaydet veya Keyframe Yakala kullanın. (Poz verisi bileşenlerde saklanır; statik mesh önizlemede transform uygulanır.)</small>
         </div>
         <div class="studio-row">
           <button class="btn btn-secondary btn-sm" id="btn-apply-action">Eylemi Uygula</button>
@@ -177,51 +177,51 @@
 
       <h3>Timeline / Keyframe</h3>
       <div class="field" style="margin-bottom:6px;">
-        <label>Zaman (scrub) â€” <span id="tl-time-label">0.00s</span> / <span id="tl-duration-label">10.00s</span></label>
+        <label>Zaman (scrub) — <span id="tl-time-label">0.00s</span> / <span id="tl-duration-label">10.00s</span></label>
         <input type="range" id="tl-scrub" min="0" max="10" step="0.033" value="0" style="width:100%;">
       </div>
       <div class="studio-row">
         <button class="btn btn-secondary btn-sm" id="btn-tl-play">Oynat</button>
         <button class="btn btn-secondary btn-sm" id="btn-tl-pause">Duraklat</button>
-        <button class="btn btn-secondary btn-sm" id="btn-tl-step">AdÄ±m</button>
-        <button class="btn btn-secondary btn-sm" id="btn-tl-preview">Ã–nizle (t)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-tl-step">Adım</button>
+        <button class="btn btn-secondary btn-sm" id="btn-tl-preview">Önizle (t)</button>
       </div>
       <div class="studio-row">
-        <button class="btn btn-secondary btn-sm" id="btn-load-timeline">YÃ¼kle</button>
+        <button class="btn btn-secondary btn-sm" id="btn-load-timeline">Yükle</button>
         <button class="btn btn-secondary btn-sm" id="btn-save-timeline">Kaydet</button>
-        <button class="btn btn-primary btn-sm" id="btn-tl-apply-save">SeÃ§ili Node'u Uygula & Kaydet</button>
+        <button class="btn btn-primary btn-sm" id="btn-tl-apply-save">Seçili Node'u Uygula & Kaydet</button>
       </div>
       <div class="field"><label>Timeline (JSON: fps,duration,tracks,keyframes)</label><textarea id="tl-json" rows="5" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
       <div id="tl-keyframes" class="muted" style="max-height:120px;overflow:auto;margin-bottom:6px;"></div>
       <div id="tl-status" class="muted"></div>
 
-      <h3>3D Ãœretim SaÄŸlayÄ±cÄ±larÄ± / Async Job</h3>
-      <div id="providers-list" class="muted">YÃ¼kleniyor...</div>
+      <h3>3D Üretim Sağlayıcıları / Async Job</h3>
+      <div id="providers-list" class="muted">Yükleniyor...</div>
       <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
         <div class="field"><label>Provider</label><select id="job-provider"><option value="procedural">procedural</option><option value="external_text_to_3d">external_text_to_3d (hook)</option><option value="external_image_to_3d">external_image_to_3d (hook)</option></select></div>
         <div class="field"><label>Mode</label><select id="job-mode"><option value="procedural">procedural</option><option value="text_to_3d">text_to_3d</option><option value="image_to_3d">image_to_3d</option></select></div>
-        <div class="field"><label>Prompt / Ä°stek</label><input id="job-prompt" type="text" placeholder="Ã¶rn: metal kÄ±lÄ±Ã§, ahÅŸap masa, insan"></div>
-        <div class="field"><label>SÄ±nÄ±f (opsiyonel, seÃ§ili sÄ±nÄ±f kullanÄ±lÄ±r)</label><input id="job-class-id" type="text" placeholder="class id (boÅŸ bÄ±rakÄ±labilir)"></div>
+        <div class="field"><label>Prompt / İstek</label><input id="job-prompt" type="text" placeholder="örn: metal kılıç, ahşap masa, insan"></div>
+        <div class="field"><label>Sınıf (opsiyonel, seçili sınıf kullanılır)</label><input id="job-class-id" type="text" placeholder="class id (boş bırakılabilir)"></div>
         <div class="studio-row">
-          <button class="btn btn-primary btn-sm" id="btn-create-3d-job">Job OluÅŸtur & Ã‡alÄ±ÅŸtÄ±r</button>
-          <button class="btn btn-secondary btn-sm" id="btn-refresh-3d-jobs">JoblarÄ± Yenile</button>
+          <button class="btn btn-primary btn-sm" id="btn-create-3d-job">Job Oluştur & Çalıştır</button>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-3d-jobs">Jobları Yenile</button>
         </div>
         <div id="jobs-list" class="muted" style="margin-top:6px;max-height:140px;overflow:auto;"></div>
       </div>
 
-      <h3>Ã–ÄŸrenen Bilgi Modelleri</h3>
-      <div id="learned-knowledge-summary" class="muted">YÃ¼kleniyor...</div>
+      <h3>Öğrenen Bilgi Modelleri</h3>
+      <div id="learned-knowledge-summary" class="muted">Yükleniyor...</div>
     </aside>
 
     <section class="viewer-wrap" id="viewer-wrap">
       <div class="viewer-toolbar">
-        <button class="btn btn-secondary btn-sm" id="btn-reset-camera">KamerayÄ± SÄ±fÄ±rla</button>
+        <button class="btn btn-secondary btn-sm" id="btn-reset-camera">Kamerayı Sıfırla</button>
         <button class="btn btn-secondary btn-sm" id="btn-frame">Kadrajla</button>
         <button class="btn btn-secondary btn-sm" id="btn-toggle-grid">Grid</button>
         <button class="btn btn-secondary btn-sm" id="btn-toggle-physics">Fizik: Kapalı</button>
       </div>
       <div id="viewer-canvas"></div>
-      <div class="viewer-status" id="viewer-status">HazÄ±r. Bir sahne seÃ§in ve glTF yÃ¼kleyin.</div>
+      <div class="viewer-status" id="viewer-status">Hazır. Bir sahne seçin ve glTF yükleyin.</div>
     </section>
   </div>
 
@@ -663,7 +663,7 @@ async function loadAssetsForScene(sceneData) {
 
   const assets = (sceneData.assets || []).filter(a => a.file_type === 'gltf' && a.url);
   if (!assets.length) {
-    setStatus('Sahne yÃ¼klendi (glTF varlÄ±k yok). Bir glTF/glb yÃ¼kleyin.');
+    setStatus('Sahne yüklendi (glTF varlık yok). Bir glTF/glb yükleyin.');
     return;
   }
 
@@ -693,22 +693,22 @@ async function loadAssetsForScene(sceneData) {
   }
   if (loaded > 0) {
     frameObject(group);
-    setStatus(`Sahne yÃ¼klendi: ${loaded} glTF varlÄ±k gÃ¶rÃ¼ntÃ¼leniyor.`);
+    setStatus(`Sahne yüklendi: ${loaded} glTF varlık görüntüleniyor.`);
   } else {
-    setStatus('glTF varlÄ±klarÄ± yÃ¼klenemedi (dosya eriÅŸimi/CORS/format kontrol edin).');
+    setStatus('glTF varlıkları yüklenemedi (dosya erişimi/CORS/format kontrol edin).');
   }
 }
 
 // ===== UI/data =====
 function renderSceneList() {
   if (!state.scenes.length) {
-    sceneListEl.innerHTML = '<li class="muted">HenÃ¼z sahne yok. "Yeni Sahne" oluÅŸturun.</li>';
+    sceneListEl.innerHTML = '<li class="muted">Henüz sahne yok. "Yeni Sahne" oluşturun.</li>';
     return;
   }
   sceneListEl.innerHTML = state.scenes.map(s => `
     <li class="studio-item ${s.id === state.selectedId ? 'active' : ''}" data-id="${s.id}">
       <strong>${escapeHtml(s.name || 'Sahne')}</strong>
-      <small>${escapeHtml(s.id.slice(0,8))} â€¢ ${new Date(s.updated_at || s.created_at || Date.now()).toLocaleString()}</small>
+      <small>${escapeHtml(s.id.slice(0,8))} • ${new Date(s.updated_at || s.created_at || Date.now()).toLocaleString()}</small>
     </li>
   `).join('');
   sceneListEl.querySelectorAll('.studio-item').forEach(item => {
@@ -721,17 +721,17 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;',
 state.selectedNodeId = null;
 
 function renderSceneMeta(scene) {
-  if (!scene) { sceneMetaEl.textContent = 'Sahne seÃ§ilmedi.'; nodeListEl.textContent = 'Sahne seÃ§ilmedi.'; el('node-editor').style.display='none'; return; }
+  if (!scene) { sceneMetaEl.textContent = 'Sahne seçilmedi.'; nodeListEl.textContent = 'Sahne seçilmedi.'; el('node-editor').style.display='none'; return; }
   sceneMetaEl.innerHTML = `<div><strong>${escapeHtml(scene.name)}</strong></div>
     <div class="muted">ID: ${escapeHtml(scene.id)}</div>
-    <div class="muted">VarlÄ±k: ${(scene.assets||[]).length} â€¢ DÃ¼ÄŸÃ¼m: ${(scene.nodes||[]).length}</div>`;
+    <div class="muted">Varlık: ${(scene.assets||[]).length} • Düğüm: ${(scene.nodes||[]).length}</div>`;
   const nodes = scene.nodes || [];
-  if (!nodes.length) { nodeListEl.innerHTML = '<div class="muted">DÃ¼ÄŸÃ¼m yok.</div>'; el('node-editor').style.display='none'; return; }
+  if (!nodes.length) { nodeListEl.innerHTML = '<div class="muted">Düğüm yok.</div>'; el('node-editor').style.display='none'; return; }
   nodeListEl.innerHTML = nodes.map(n => {
     const bones = n.components?.skeleton?.bones || [];
-    const boneInfo = bones.length ? ` â€¢ kemik: ${bones.length}` : '';
+    const boneInfo = bones.length ? ` • kemik: ${bones.length}` : '';
     const active = n.id === state.selectedNodeId ? 'style="background:var(--accent-bg);"' : '';
-    return `<div class="node-row" data-nid="${n.id}" ${active}>â€¢ <strong>${escapeHtml(n.name)}</strong> <span class="muted">(${escapeHtml(n.node_type)}${boneInfo})</span></div>`;
+    return `<div class="node-row" data-nid="${n.id}" ${active}>• <strong>${escapeHtml(n.name)}</strong> <span class="muted">(${escapeHtml(n.node_type)}${boneInfo})</span></div>`;
   }).join('');
   nodeListEl.querySelectorAll('[data-nid]').forEach(row => row.addEventListener('click', () => selectNode(row.dataset.nid)));
   if (state.selectedNodeId && !nodes.find(n=>n.id===state.selectedNodeId)) { state.selectedNodeId = null; el('node-editor').style.display='none'; }
@@ -753,7 +753,7 @@ function selectNode(id, silent) {
   el('ne-skeleton').value = JSON.stringify(comps.skeleton || {bones:[]}, null, 2);
   el('ne-animation').value = JSON.stringify(comps.animation || {pose:{}, keyframes:[], clips:[]}, null, 2);
   el('ne-physics').value = JSON.stringify(comps.physics || {}, null, 2);
-  el('ne-meta').textContent = `id: ${n.id.slice(0,8)} â€¢ tip: ${n.node_type} â€¢ asset: ${(n.asset_id||'').slice(0,8) || '-'}`;
+  el('ne-meta').textContent = `id: ${n.id.slice(0,8)} • tip: ${n.node_type} • asset: ${(n.asset_id||'').slice(0,8) || '-'}`;
 }
 
 async function saveSelectedNode() {
@@ -774,8 +774,8 @@ async function saveSelectedNode() {
     });
     await selectScene(sid, true);
     selectNode(nid);
-    setStatus('Node kaydedildi ve sahne gÃ¼ncellendi.');
-  } catch (e) { alert('Node kaydetme hatasÄ±: ' + e.message); }
+    setStatus('Node kaydedildi ve sahne güncellendi.');
+  } catch (e) { alert('Node kaydetme hatası: ' + e.message); }
 }
 
 async function deleteSelectedNode() {
@@ -786,7 +786,7 @@ async function deleteSelectedNode() {
     state.selectedNodeId = null; el('node-editor').style.display='none';
     await selectScene(sid, true);
     setStatus('Node silindi.');
-  } catch (e) { alert('Silme hatasÄ±: ' + e.message); }
+  } catch (e) { alert('Silme hatası: ' + e.message); }
 }
 
 async function duplicateSelectedNode() {
@@ -801,8 +801,8 @@ async function duplicateSelectedNode() {
       body: JSON.stringify({ name: (n.name||'Node') + ' Kopya', node_type: n.node_type, asset_id: n.asset_id, parent_id: n.parent_id, components: comps, visible: n.visible, sort_order: (n.sort_order||0)+1 })
     });
     await selectScene(sid, true);
-    setStatus('Node Ã§oÄŸaltÄ±ldÄ±.');
-  } catch (e) { alert('Ã‡oÄŸaltma hatasÄ±: ' + e.message); }
+    setStatus('Node çoğaltıldı.');
+  } catch (e) { alert('Çoğaltma hatası: ' + e.message); }
 }
 
 async function applySelectedAction() {
@@ -815,8 +815,8 @@ async function applySelectedAction() {
       body: JSON.stringify({ action })
     });
     await selectScene(sid, true); selectNode(nid);
-    setStatus(`Eylem uygulandÄ±: ${action}`);
-  } catch (e) { alert('Eylem hatasÄ±: ' + e.message); }
+    setStatus(`Eylem uygulandı: ${action}`);
+  } catch (e) { alert('Eylem hatası: ' + e.message); }
 }
 
 function renderTimelineUI() {
@@ -1026,11 +1026,11 @@ async function loadLearnedKnowledgeSummary() {
     ]);
     const entities = eRes.items || [];
     const videos = vRes.items || [];
-    const entHtml = entities.length ? entities.slice(0,5).map(i => `<div>â€¢ <strong>${escapeHtml(i.concept||'?')}</strong> <span class="muted">(katman:${i.hierarchy_levels||0}, araÅŸtÄ±rma:${i.research_count||0}, gÃ¼ven:${Number(i.confidence||0).toFixed(2)})</span></div>`).join('') : '<div class="muted">HenÃ¼z Ã¶ÄŸrenilmiÅŸ 3D varlÄ±k yok.</div>';
-    const vidHtml = videos.length ? videos.slice(0,3).map(i => `<div>â€¢ Video modeli <span class="muted">(baÅŸarÄ±lÄ±:${i.successful_jobs||0}, insight:${i.insights_count||0})</span></div>`).join('') : '<div class="muted">HenÃ¼z Ã¶ÄŸrenilmiÅŸ video modeli yok.</div>';
-    elSum.innerHTML = `<div><strong>3D (ayrÄ± model):</strong></div>${entHtml}<div style="margin-top:6px;"><strong>Video (ayrÄ± model):</strong></div>${vidHtml}`;
+    const entHtml = entities.length ? entities.slice(0,5).map(i => `<div>• <strong>${escapeHtml(i.concept||'?')}</strong> <span class="muted">(katman:${i.hierarchy_levels||0}, araştırma:${i.research_count||0}, güven:${Number(i.confidence||0).toFixed(2)})</span></div>`).join('') : '<div class="muted">Henüz öğrenilmiş 3D varlık yok.</div>';
+    const vidHtml = videos.length ? videos.slice(0,3).map(i => `<div>• Video modeli <span class="muted">(başarılı:${i.successful_jobs||0}, insight:${i.insights_count||0})</span></div>`).join('') : '<div class="muted">Henüz öğrenilmiş video modeli yok.</div>';
+    elSum.innerHTML = `<div><strong>3D (ayrı model):</strong></div>${entHtml}<div style="margin-top:6px;"><strong>Video (ayrı model):</strong></div>${vidHtml}`;
   } catch(e) {
-    elSum.textContent = 'Ã–ÄŸrenen bilgi alÄ±namadÄ±.';
+    elSum.textContent = 'Öğrenen bilgi alınamadı.';
   }
 }
 
@@ -1050,16 +1050,16 @@ state.selectedClassId = null;
 function parseJsonField(text, fallback) {
   const t = (text || '').trim();
   if (!t) return fallback;
-  try { return JSON.parse(t); } catch (e) { throw new Error('GeÃ§ersiz JSON'); }
+  try { return JSON.parse(t); } catch (e) { throw new Error('Geçersiz JSON'); }
 }
 
 function renderClassList() {
   const classes = state.classes || [];
-  if (!classes.length) { classListEl.innerHTML = '<div class="muted">SÄ±nÄ±f yok.</div>'; return; }
+  if (!classes.length) { classListEl.innerHTML = '<div class="muted">Sınıf yok.</div>'; return; }
   classListEl.innerHTML = classes.map(c => `
     <div class="studio-item ${c.id === state.selectedClassId ? 'active' : ''}" data-cid="${c.id}">
       <strong>${escapeHtml(c.name)}</strong>
-      <small>${escapeHtml(c.category)}${c.is_system ? ' â€¢ sistem' : ''}${c.skeleton_template?.bones?.length ? ' â€¢ kemik: '+c.skeleton_template.bones.length : ''}</small>
+      <small>${escapeHtml(c.category)}${c.is_system ? ' • sistem' : ''}${c.skeleton_template?.bones?.length ? ' • kemik: '+c.skeleton_template.bones.length : ''}</small>
     </div>
   `).join('');
   classListEl.querySelectorAll('[data-cid]').forEach(item => {
@@ -1087,8 +1087,8 @@ function selectClass(id) {
   el('btn-delete-class').disabled = !editable;
   const hier = (c.skeleton_template && c.skeleton_template.hierarchy) || (c.components_template && c.components_template.skeleton && c.components_template.skeleton.hierarchy) || null;
   const layers = hier && Array.isArray(hier.layers) ? hier.layers.length : 0;
-  const learned = layers ? ` â€¢ bottom-up katman: ${layers}` : ' â€¢ Ã¶ÄŸrenilmiÅŸ hiyerarÅŸi: yok';
-  el('ce-meta').textContent = `${c.is_system ? 'Sistem sÄ±nÄ±fÄ± (salt okunur)' : 'KullanÄ±cÄ± sÄ±nÄ±fÄ± (dÃ¼zenlenebilir/Ã¶ÄŸrenen)'} â€¢ v${c.version || 1} â€¢ id: ${c.id.slice(0,8)}${learned}`;
+  const learned = layers ? ` • bottom-up katman: ${layers}` : ' • öğrenilmiş hiyerarşi: yok';
+  el('ce-meta').textContent = `${c.is_system ? 'Sistem sınıfı (salt okunur)' : 'Kullanıcı sınıfı (düzenlenebilir/öğrenen)'} • v${c.version || 1} • id: ${c.id.slice(0,8)}${learned}`;
   renderKnowledgeInfo(null);
 }
 
@@ -1098,12 +1098,12 @@ function renderKnowledgeInfo(info) {
   if (!info) { elK.textContent = ''; return; }
   const k = info.knowledge || info;
   const lines = [];
-  if (k.confidence !== undefined) lines.push(`GÃ¼ven: ${Number(k.confidence||0).toFixed(2)} â€¢ AraÅŸtÄ±rma sayÄ±sÄ±: ${k.research_count||0}`);
-  if (k.hierarchy_levels) lines.push(`Bottom-up katman sayÄ±sÄ±: ${k.hierarchy_levels}`);
-  if (k.sources_count !== undefined) lines.push(`Kaynak sayÄ±sÄ±: ${k.sources_count}`);
-  if (k.last_researched_at) lines.push(`Son araÅŸtÄ±rma: ${k.last_researched_at}`);
-  if (info.research && info.research.always_researched) lines.push(`Ä°nternet araÅŸtÄ±rmasÄ±: her zaman yapÄ±ldÄ± (offline=${!!info.research.offline})`);
-  if (k.summary) lines.push('', 'Ã–zet:', String(k.summary).slice(0, 600));
+  if (k.confidence !== undefined) lines.push(`Güven: ${Number(k.confidence||0).toFixed(2)} • Araştırma sayısı: ${k.research_count||0}`);
+  if (k.hierarchy_levels) lines.push(`Bottom-up katman sayısı: ${k.hierarchy_levels}`);
+  if (k.sources_count !== undefined) lines.push(`Kaynak sayısı: ${k.sources_count}`);
+  if (k.last_researched_at) lines.push(`Son araştırma: ${k.last_researched_at}`);
+  if (info.research && info.research.always_researched) lines.push(`İnternet araştırması: her zaman yapıldı (offline=${!!info.research.offline})`);
+  if (k.summary) lines.push('', 'Özet:', String(k.summary).slice(0, 600));
   const hier = info.hierarchy;
   if (hier && Array.isArray(hier.layers)) {
     lines.push('', 'Bottom-up katmanlar:');
@@ -1121,40 +1121,40 @@ async function loadClasses() {
     renderClassList();
     if (state.selectedClassId) selectClass(state.selectedClassId);
   } catch (e) {
-    classListEl.innerHTML = '<div class="muted">SÄ±nÄ±flar yÃ¼klenemedi.</div>';
+    classListEl.innerHTML = '<div class="muted">Sınıflar yüklenemedi.</div>';
   }
 }
 
 async function createNewClass(withResearch=false) {
-  const name = prompt(withResearch ? 'AraÅŸtÄ±rÄ±lacak yeni sÄ±nÄ±f/varlÄ±k adÄ±:' : 'Yeni sÄ±nÄ±f adÄ±:', 'Yeni VarlÄ±k');
+  const name = prompt(withResearch ? 'Araştırılacak yeni sınıf/varlık adı:' : 'Yeni sınıf adı:', 'Yeni Varlık');
   if (name === null) return;
-  setStatus(withResearch ? 'Ä°nternet araÅŸtÄ±rmasÄ± yapÄ±lÄ±yor ve sÄ±nÄ±f Ã¶ÄŸreniliyor (bottom-up)...' : 'SÄ±nÄ±f oluÅŸturuluyor...');
+  setStatus(withResearch ? 'İnternet araştırması yapılıyor ve sınıf öğreniliyor (bottom-up)...' : 'Sınıf oluşturuluyor...');
   try {
     let data;
     if (withResearch) {
       data = await api('/api/entity-classes/research/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
-        body: JSON.stringify({ name: name || 'Yeni VarlÄ±k', category: 'other' })
+        body: JSON.stringify({ name: name || 'Yeni Varlık', category: 'other' })
       });
     } else {
       data = await api('/api/entity-classes/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
-        body: JSON.stringify({ name: name || 'Yeni VarlÄ±k', category: 'other' })
+        body: JSON.stringify({ name: name || 'Yeni Varlık', category: 'other' })
       });
     }
     await loadClasses();
     if (data.class?.id) selectClass(data.class.id);
     if (data.knowledge || data.research) renderKnowledgeInfo(data);
     loadLearnedKnowledgeSummary().catch(()=>{});
-    setStatus(withResearch ? 'SÄ±nÄ±f internetten araÅŸtÄ±rÄ±ldÄ± ve Ã¶ÄŸrenen modele kaydedildi.' : 'SÄ±nÄ±f oluÅŸturuldu.');
+    setStatus(withResearch ? 'Sınıf internetten araştırıldı ve öğrenen modele kaydedildi.' : 'Sınıf oluşturuldu.');
   } catch (e) { alert('Hata: ' + e.message); setStatus('Hata: ' + e.message); }
 }
 
 async function researchSelectedClass() {
   const id = state.selectedClassId; if (!id) return;
-  setStatus('Ä°nternet araÅŸtÄ±rmasÄ± yapÄ±lÄ±yor, bottom-up hiyerarÅŸi Ã¶ÄŸreniliyor...');
+  setStatus('İnternet araştırması yapılıyor, bottom-up hiyerarşi öğreniliyor...');
   try {
     const data = await api(`/api/entity-classes/${id}/research/`, {
       method: 'POST',
@@ -1165,8 +1165,8 @@ async function researchSelectedClass() {
     if (data.class?.id) selectClass(data.class.id);
     renderKnowledgeInfo(data);
     loadLearnedKnowledgeSummary().catch(()=>{});
-    setStatus('SÄ±nÄ±f araÅŸtÄ±rÄ±ldÄ± ve Ã¶ÄŸrenen modele gÃ¼ncellendi.');
-  } catch (e) { alert('AraÅŸtÄ±rma hatasÄ±: ' + e.message); setStatus('AraÅŸtÄ±rma hatasÄ±: ' + e.message); }
+    setStatus('Sınıf araştırıldı ve öğrenen modele güncellendi.');
+  } catch (e) { alert('Araştırma hatası: ' + e.message); setStatus('Araştırma hatası: ' + e.message); }
 }
 
 async function saveSelectedClass() {
@@ -1188,29 +1188,29 @@ async function saveSelectedClass() {
     });
     await loadClasses();
     selectClass(id);
-    setStatus('SÄ±nÄ±f kaydedildi.');
-  } catch (e) { alert('Kaydetme hatasÄ±: ' + e.message); }
+    setStatus('Sınıf kaydedildi.');
+  } catch (e) { alert('Kaydetme hatası: ' + e.message); }
 }
 
 async function deleteSelectedClass() {
   const id = state.selectedClassId; if (!id) return;
-  if (!confirm('Bu sÄ±nÄ±f silinsin mi?')) return;
+  if (!confirm('Bu sınıf silinsin mi?')) return;
   try {
     await api(`/api/entity-classes/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') || '' } });
     state.selectedClassId = null;
     el('class-editor').style.display = 'none';
     await loadClasses();
-    setStatus('SÄ±nÄ±f silindi.');
-  } catch (e) { alert('Silme hatasÄ±: ' + e.message); }
+    setStatus('Sınıf silindi.');
+  } catch (e) { alert('Silme hatası: ' + e.message); }
 }
 
 async function instantiateSelectedClass() {
   const id = state.selectedClassId; if (!id) return;
-  if (!state.selectedId) { alert('Ã–nce bir sahne seÃ§in.'); return; }
+  if (!state.selectedId) { alert('Önce bir sahne seçin.'); return; }
   const c = (state.classes || []).find(x => x.id === id);
   let params = {};
   try { params = parseJsonField(el('ce-params').value, {}); } catch(e) { alert(e.message); return; }
-  setStatus(`"${c?.name || 'SÄ±nÄ±f'}" Ã¼retiliyor ve sahneye yerleÅŸtiriliyor...`);
+  setStatus(`"${c?.name || 'Sınıf'}" üretiliyor ve sahneye yerleştiriliyor...`);
   try {
     await api(`/api/entity-classes/${id}/instantiate/`, {
       method: 'POST',
@@ -1218,8 +1218,8 @@ async function instantiateSelectedClass() {
       body: JSON.stringify({ scene_id: state.selectedId, name: c?.name || 'Instance', parameters: params, place: true })
     });
     await selectScene(state.selectedId, true);
-    setStatus('3D Ã¶rnek Ã¼retildi ve sahneye yerleÅŸtirildi.');
-  } catch (e) { alert('Ãœretim hatasÄ±: ' + e.message); setStatus('Ãœretim hatasÄ±: ' + e.message); }
+    setStatus('3D örnek üretildi ve sahneye yerleştirildi.');
+  } catch (e) { alert('Üretim hatası: ' + e.message); setStatus('Üretim hatası: ' + e.message); }
 }
 
 // compatibility alias used nowhere else now
@@ -1242,7 +1242,7 @@ async function selectScene(id, silent=false) {
 
 
 async function createScene() {
-  const name = prompt('Sahne adÄ±:', 'Yeni Sahne');
+  const name = prompt('Sahne adı:', 'Yeni Sahne');
   if (name === null) return;
   const data = await api('/api/scenes/', {
     method: 'POST',
@@ -1259,16 +1259,16 @@ function getCookie(name) {
 }
 
 async function uploadAsset() {
-  if (!state.selectedId) { alert('Ã–nce bir sahne seÃ§in.'); return; }
+  if (!state.selectedId) { alert('Önce bir sahne seçin.'); return; }
   const fileInput = el('asset-file');
   const file = fileInput.files && fileInput.files[0];
-  if (!file) { alert('Bir glTF/glb dosyasÄ± seÃ§in.'); return; }
+  if (!file) { alert('Bir glTF/glb dosyası seçin.'); return; }
   const fd = new FormData();
   fd.append('file', file);
   const name = el('asset-name').value.trim();
   if (name) fd.append('name', name);
   fd.append('auto_node', '1');
-  setStatus('YÃ¼kleniyor...');
+  setStatus('Yükleniyor...');
   try {
     await api(`/api/scenes/${state.selectedId}/assets/`, {
       method: 'POST',
@@ -1278,11 +1278,11 @@ async function uploadAsset() {
     fileInput.value = '';
     el('asset-name').value = '';
     await selectScene(state.selectedId, true);
-    setStatus('VarlÄ±k yÃ¼klendi ve sahneye eklendi.');
+    setStatus('Varlık yüklendi ve sahneye eklendi.');
   } catch (e) {
     console.error(e);
-    setStatus('YÃ¼kleme hatasÄ±: ' + e.message);
-    alert('YÃ¼kleme hatasÄ±: ' + e.message);
+    setStatus('Yükleme hatası: ' + e.message);
+    alert('Yükleme hatası: ' + e.message);
   }
 }
 
