@@ -297,6 +297,7 @@ def image_generate(request):
     background_requested = str(body.get("background", request.GET.get("background", ""))).lower() in ("1", "true", "yes")
     run_sync = sync_requested or not background_requested
 
+    run_error = None
     try:
         if run_sync:
             job = _call_run(str(job.id))
@@ -306,8 +307,9 @@ def image_generate(request):
                 pass
         else:
             ig.run_generation_background(str(job.id))
-    except Exception:
+    except Exception as exc:
         logger.exception("Image generation run failed")
+        run_error = f"{type(exc).__name__}: {exc}"
         try:
             job.refresh_from_db()
         except Exception:
@@ -315,6 +317,22 @@ def image_generate(request):
 
     serialized = _serialize_job(job)
     job_payload = {k: v for k, v in serialized.items() if k != "ok"}
+
+    if run_sync and getattr(job, "status", None) != "completed":
+        error_msg = run_error or getattr(job, "error", "") or "Image generation failed"
+        return _json(
+            {
+                "ok": False,
+                "error": error_msg,
+                "code": "generation_failed",
+                "job": job_payload,
+                "image": job_payload,
+                "id": str(job.id),
+                "status": getattr(job, "status", None),
+            },
+            status=500,
+        )
+
     return _json(
         {
             "ok": True,

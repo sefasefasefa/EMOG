@@ -184,3 +184,49 @@ class ImageApiTests(TestCase):
         data = resp.json()
         self.assertFalse(data.get("ok", True))
         self.assertIn(data.get("code"), {"invalid_path", "traversal"})
+
+    def test_generate_returns_no_false_success_on_sync_run_exception(self):
+        from unittest.mock import patch
+
+        self._auth()
+        with patch("agent_app.image_views._call_run", side_effect=RuntimeError("boom")):
+            resp = self.client.post(
+                "/api/image/generate/",
+                data={"prompt": "fail", "width": 64, "height": 64, "format": "png", "sync": "1"},
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 500, resp.content)
+        data = resp.json()
+        self.assertFalse(data.get("ok", True))
+        self.assertEqual(data.get("code"), "generation_failed")
+        self.assertIn("boom", (data.get("error") or ""))
+        job = (data.get("job") or data.get("image") or {})
+        self.assertTrue(data.get("id") or job.get("id"))
+
+    def test_generate_returns_no_false_success_when_sync_job_not_completed(self):
+        from unittest.mock import patch
+
+        self._auth()
+
+        def _fail_run(job_id):
+            job = ImageJob.objects.get(id=job_id)
+            job.status = "failed"
+            job.error = "quota exceeded"
+            job.progress = 100
+            job.save(update_fields=["status", "error", "progress"])
+            return job
+
+        with patch("agent_app.image_views._call_run", side_effect=_fail_run):
+            resp = self.client.post(
+                "/api/image/generate/",
+                data={"prompt": "fail", "width": 64, "height": 64, "format": "png", "sync": "1"},
+                content_type="application/json",
+            )
+        self.assertEqual(resp.status_code, 500, resp.content)
+        data = resp.json()
+        self.assertFalse(data.get("ok", True))
+        self.assertEqual(data.get("code"), "generation_failed")
+        self.assertEqual(data.get("status"), "failed")
+        self.assertIn("quota", (data.get("error") or "").lower())
+        job = (data.get("job") or data.get("image") or {})
+        self.assertEqual(job.get("status"), "failed")
