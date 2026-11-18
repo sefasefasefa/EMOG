@@ -842,6 +842,124 @@ class VideoJob(models.Model):
     def output(self, value):
         self.output_path = value or ""
 
+def chat_attachment_upload_to(instance, filename):
+    from django.utils.text import get_valid_filename
+
+    name = get_valid_filename(filename or "attachment")
+    user_part = str(getattr(instance, "user_id", None) or "anon")
+    token = uuid.uuid4().hex
+    return f"chat_uploads/{user_part}/{token}_{name}"
+
+
+class ChatAttachment(models.Model):
+    """Sohbet mesajlarına bağlı, kullanıcıya ait dosya eki."""
+
+    KIND_CHOICES = [
+        ("image", "Image"),
+        ("video", "Video"),
+        ("file", "File"),
+        ("3d_model", "3D Model"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="chat_attachments"
+    )
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="chat_attachments"
+    )
+    node = models.ForeignKey(
+        Node, on_delete=models.SET_NULL, related_name="chat_attachments",
+        null=True, blank=True,
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default="file")
+    name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=255, blank=True, default="")
+    size = models.PositiveBigIntegerField(default=0)
+    file = models.FileField(upload_to=chat_attachment_upload_to, max_length=500)
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "chat_attachments"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["conversation", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return self.name or f"ChatAttachment {str(self.id)[:8]}"
+
+
+class ImageJob(models.Model):
+    """2D AI görsel üretim işi (VideoJob ile paralel)."""
+
+    MODE_CHOICES = [
+        ("generate", "Generate"),
+        ("edit", "Edit"),
+    ]
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("processing", "Processing"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    ]
+    FORMAT_CHOICES = [
+        ("png", "PNG"),
+        ("jpg", "JPG"),
+        ("jpeg", "JPEG"),
+        ("webp", "WebP"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="image_jobs",
+        null=True, blank=True,
+    )
+    prompt = models.TextField(blank=True, default="")
+    mode = models.CharField(
+        max_length=24, choices=MODE_CHOICES, default="generate", db_index=True
+    )
+    provider = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default="pending", db_index=True
+    )
+    progress = models.PositiveSmallIntegerField(default=0)
+    width = models.PositiveIntegerField(default=1024)
+    height = models.PositiveIntegerField(default=1024)
+    format = models.CharField(
+        max_length=8, choices=FORMAT_CHOICES, default="png"
+    )
+    output_path = models.CharField(max_length=500, blank=True, default="")
+    input_path = models.CharField(max_length=500, blank=True, default="")
+    thumbnail_path = models.CharField(max_length=500, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+    result = models.JSONField(default=dict, blank=True)
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "image_jobs"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"ImageJob {str(self.id)[:8]} ({self.mode}/{self.status})"
+
+    @property
+    def is_finished(self):
+        return self.status in ("completed", "failed", "cancelled")
 
 # NEURAL CORE modelleri (agent_app uygulamasına bağlı)
 from .neural_core.models import (  # noqa: E402,F401
