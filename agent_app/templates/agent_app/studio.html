@@ -1,0 +1,1662 @@
+﻿{% extends "agent_app/base.html" %}
+{% block title %}3D Studio â€” EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .studio-wrap { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: stretch; min-height: calc(100vh - 140px); }
+  .studio-panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; overflow: auto; }
+  .studio-panel h2 { margin: 0 0 8px; font-size: 1rem; }
+  .studio-panel h3 { margin: 12px 0 6px; font-size: 0.9rem; color: var(--fg-muted); }
+  .studio-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .studio-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  .studio-item { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; background: var(--bg-elev); }
+  .studio-item.active { border-color: var(--accent); background: var(--accent-bg); }
+  .studio-item small { color: var(--fg-muted); display: block; }
+  .viewer-wrap { position: relative; background: #0b1020; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; min-height: 60vh; }
+  #viewer-canvas { width: 100%; height: 100%; display: block; }
+  .viewer-toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; flex-wrap: wrap; z-index: 5; }
+  .viewer-toolbar .btn { backdrop-filter: blur(6px); }
+  .viewer-status { position: absolute; bottom: 10px; left: 10px; right: 10px; color: #cbd5e1; font-size: 12px; background: rgba(0,0,0,.35); padding: 6px 8px; border-radius: 6px; z-index: 5; }
+  .node-tree { font-size: 13px; }
+  .node-row { padding: 4px 6px; border-radius: 6px; }
+  .node-row:hover { background: var(--card-hover); }
+  .muted { color: var(--fg-muted); font-size: 12px; }
+  .field { width: 100%; margin-bottom: 8px; }
+  .field label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 4px; }
+  .field input, .field select, .field textarea { width: 100%; }
+  @media (max-width: 900px) {
+    .studio-wrap { grid-template-columns: 1fr; }
+    .viewer-wrap { min-height: 50vh; }
+  }
+
+  /* Studio tabs + media section */
+  .studio-tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .studio-tab-btn { padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--fg); cursor: pointer; font: inherit; font-size: 0.9rem; }
+  .studio-tab-btn.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent-light, var(--fg)); }
+  .studio-tab-panel { display: block; }
+  .media-wrap { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+  .media-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); padding: 14px; }
+  .media-card h2 { margin: 0 0 6px; font-size: 1rem; }
+  .media-muted { color: var(--fg-muted); font-size: 0.82rem; line-height: 1.5; margin: 0 0 10px; }
+  .media-form { display: flex; flex-direction: column; gap: 8px; }
+  .media-form textarea, .media-form input[type=text], .media-form input[type=number], .media-form select, .media-form input[type=file] { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--fg); padding: 8px 10px; font: inherit; font-size: 0.88rem; }
+  .media-form textarea { min-height: 90px; resize: vertical; }
+  .media-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .media-row > * { flex: 1 1 140px; min-width: 0; }
+  .media-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--accent-border); background: var(--accent-bg); color: var(--accent-light, var(--fg)); cursor: pointer; font: inherit; font-size: 0.86rem; font-weight: 600; }
+  .media-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .media-btn.secondary { border-color: var(--border); background: var(--card); color: var(--fg); }
+  .media-status { font-size: 0.82rem; color: var(--fg-muted); margin-top: 6px; min-height: 1.2em; }
+  .media-progress { height: 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); overflow: hidden; margin-top: 6px; }
+  .media-progress > div { height: 100%; width: 0%; background: var(--accent, #3b82f6); transition: width .25s ease; }
+  .media-preview { width: 100%; max-height: 360px; border-radius: 10px; background: #000; margin-top: 8px; display: none; }
+  .media-preview-img { width: 100%; max-height: 360px; object-fit: contain; border-radius: 10px; background: #0b1020; margin-top: 8px; display: none; }
+  .media-jobs { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow: auto; }
+  .media-job { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--bg-elev, var(--bg)); cursor: pointer; font-size: 0.82rem; }
+  .media-job:hover { border-color: var(--accent); }
+  .media-job-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .media-job p { margin: 4px 0 0; color: var(--fg-muted); font-size: 0.75rem; }
+  .media-pill { display: inline-block; font-size: 0.7rem; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-muted); }
+  .media-pill.ok { border-color: rgba(34,197,94,.35); color: #4ade80; background: rgba(34,197,94,.08); }
+  .media-pill.warn { border-color: rgba(245,158,11,.35); color: #fbbf24; background: rgba(245,158,11,.08); }
+  .media-pill.err { border-color: rgba(239,68,68,.35); color: #f87171; background: rgba(239,68,68,.08); }
+  .media-empty { color: var(--fg-subtle, var(--fg-muted)); font-size: 0.82rem; padding: 6px 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="studio-tabs" role="tablist" aria-label="Studio sections">
+    <button type="button" class="studio-tab-btn active" id="tab-btn-3d" data-studio-tab="3d">3D Sahne</button>
+    <button type="button" class="studio-tab-btn" id="tab-btn-media" data-studio-tab="media">Video & Medya</button>
+  </div>
+
+  <div id="studio-tab-3d" class="studio-tab-panel">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+    <div>
+      <h1 style="margin:0;font-size:1.4rem;">3D Sahne StÃ¼dyosu (MVP)</h1>
+      <p class="muted" style="margin:4px 0 0;">Obje/sahne/iskelet veri modeli + glTF gÃ¶rÃ¼ntÃ¼leyici (her yÃ¶nden bakÄ±ÅŸ)</p>
+    </div>
+    <div class="studio-row" style="margin:0;">
+      <button class="btn btn-secondary btn-sm" id="btn-refresh">Yenile</button>
+      <button class="btn btn-primary btn-sm" id="btn-new-scene">Yeni Sahne</button>
+    </div>
+  </div>
+
+  <div class="studio-wrap">
+    <aside class="studio-panel">
+      <h2>Sahneler</h2>
+      <ul class="studio-list" id="scene-list"><li class="muted">YÃ¼kleniyor...</li></ul>
+
+      <h3>VarlÄ±k SÄ±nÄ±flarÄ± (Class â†’ 3D â†’ Sahne)</h3>
+      <p class="muted" style="margin:0 0 8px;">SÄ±nÄ±f seÃ§ â†’ dÃ¼zenle/Ã¼ret â†’ 3D render â†’ sahneye yerleÅŸtir. (identity.locked_fields kimlik korumasÄ±)</p>
+      <div class="studio-row">
+        <button class="btn btn-secondary btn-sm" id="btn-new-class">Yeni SÄ±nÄ±f</button>
+        <button class="btn btn-primary btn-sm" id="btn-research-new-class">AraÅŸtÄ±r & Ã–ÄŸren (Yeni)</button>
+        <button class="btn btn-secondary btn-sm" id="btn-reload-classes">SÄ±nÄ±flarÄ± Yenile</button>
+      </div>
+      <div id="class-list" class="studio-list"><li class="muted">YÃ¼kleniyor...</li></div>
+      <div id="class-editor" style="margin-top:10px;display:none;border-top:1px solid var(--border);padding-top:10px;">
+        <h4 style="margin:0 0 8px;font-size:0.9rem;">SÄ±nÄ±f DÃ¼zenleyici</h4>
+        <div class="field"><label>Ad</label><input id="ce-name" type="text"></div>
+        <div class="field"><label>Kategori</label>
+          <select id="ce-category">
+            <option value="human">human</option><option value="character">character</option><option value="creature">creature</option>
+            <option value="prop">prop</option><option value="weapon">weapon</option><option value="vehicle">vehicle</option>
+            <option value="environment">environment</option><option value="camera">camera</option><option value="light">light</option><option value="other">other</option>
+          </select>
+        </div>
+        <div class="field"><label>AÃ§Ä±klama</label><input id="ce-desc" type="text"></div>
+        <div class="field"><label>Parametreler (JSON)</label><textarea id="ce-params" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>BileÅŸen Åžablonu (JSON: identity/transform/mesh/skeleton/animation/physics/render)</label><textarea id="ce-components" rows="5" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Ä°skelet Åžablonu (JSON)</label><textarea id="ce-skeleton" rows="4" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Render Åžablonu (JSON)</label><textarea id="ce-render" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="studio-row">
+          <button class="btn btn-primary btn-sm" id="btn-save-class">Kaydet</button>
+          <button class="btn btn-secondary btn-sm" id="btn-delete-class">Sil</button>
+          <button class="btn btn-secondary btn-sm" id="btn-instantiate-class">Ãœret & YerleÅŸtir</button>
+          <button class="btn btn-secondary btn-sm" id="btn-research-class">AraÅŸtÄ±r & Ã–ÄŸren (GÃ¼ncelle)</button>
+        </div>
+        <div id="ce-meta" class="muted"></div>
+        <pre id="ce-knowledge" class="muted" style="margin-top:6px;white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto;"></pre>
+      </div>
+
+      <h3>VarlÄ±k (glTF/GLB) YÃ¼kle</h3>
+      <div class="field">
+        <label>Dosya</label>
+        <input type="file" id="asset-file" accept=".glb,.gltf,.bin,.png,.jpg,.jpeg,.webp">
+      </div>
+      <div class="field">
+        <label>Ad (opsiyonel)</label>
+        <input type="text" id="asset-name" placeholder="Model adÄ±">
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-upload-asset">YÃ¼kle ve Sahneye Ekle</button>
+      <p class="muted" style="margin-top:6px;">SeÃ§ili sahneye glTF/glb yÃ¼kler; mesh node olarak eklenir.</p>
+
+      <h3>SeÃ§ili Sahne Bilgisi</h3>
+      <div id="scene-meta" class="muted">Sahne seÃ§ilmedi.</div>
+
+      <h3>DÃ¼ÄŸÃ¼mler (Nodes)</h3>
+      <div id="node-list" class="node-tree muted">Sahne seÃ§ilmedi.</div>
+      <div id="node-editor" style="margin-top:10px;display:none;border-top:1px solid var(--border);padding-top:10px;">
+        <h4 style="margin:0 0 8px;font-size:0.9rem;">Node DÃ¼zenleyici</h4>
+        <div class="field"><label>Ad</label><input id="ne-name" type="text"></div>
+        <div class="field"><label>GÃ¶rÃ¼nÃ¼r</label><select id="ne-visible"><option value="true">Evet</option><option value="false">HayÄ±r</option></select></div>
+        <div class="field"><label>Transform (JSON: position/rotation/scale)</label><textarea id="ne-transform" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Identity (JSON, locked_fields dahil)</label><textarea id="ne-identity" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Skeleton (JSON)</label><textarea id="ne-skeleton" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Animation/Pose (JSON)</label><textarea id="ne-animation" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="field"><label>Physics (JSON)</label><textarea id="ne-physics" rows="3" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+        <div class="studio-row">
+          <button class="btn btn-primary btn-sm" id="btn-save-node">Kaydet</button>
+          <button class="btn btn-secondary btn-sm" id="btn-dup-node">Ã‡oÄŸalt</button>
+          <button class="btn btn-secondary btn-sm" id="btn-delete-node">Sil</button>
+        </div>
+        <div class="field" style="margin-top:8px;"><label>Eylem / Pose Preset (animasyon/fizik)</label>
+          <select id="ne-action">
+            <option value="idle">idle (Bekle / pose sÄ±fÄ±rla)</option>
+            <option value="walk">walk (YÃ¼rÃ¼)</option>
+            <option value="run">run (KoÅŸ)</option>
+            <option value="raise_arm">raise_arm (Kol kaldÄ±r)</option>
+            <option value="wave">wave (El salla)</option>
+            <option value="jump">jump (ZÄ±pla)</option>
+            <option value="crouch">crouch (Ã‡Ã¶mel)</option>
+            <option value="turn_left">turn_left (Sola dÃ¶n)</option>
+            <option value="turn_right">turn_right (SaÄŸa dÃ¶n)</option>
+            <option value="swing_sword">swing_sword (KÄ±lÄ±Ã§la vur)</option>
+          </select>
+          <small class="muted">Eylem uygulanÄ±r; detaylÄ± poz/fizik iÃ§in JSON alanlarÄ±nÄ± dÃ¼zenleyip Kaydet veya Keyframe Yakala kullanÄ±n. (Poz verisi bileÅŸenlerde saklanÄ±r; statik mesh Ã¶nizlemede transform uygulanÄ±r.)</small>
+        </div>
+        <div class="studio-row">
+          <button class="btn btn-secondary btn-sm" id="btn-apply-action">Eylemi Uygula</button>
+          <button class="btn btn-secondary btn-sm" id="btn-capture-keyframe">Keyframe Yakala</button>
+        </div>
+        <div id="ne-meta" class="muted"></div>
+      </div>
+
+      <h3>Timeline / Keyframe</h3>
+      <div class="field" style="margin-bottom:6px;">
+        <label>Zaman (scrub) â€” <span id="tl-time-label">0.00s</span> / <span id="tl-duration-label">10.00s</span></label>
+        <input type="range" id="tl-scrub" min="0" max="10" step="0.033" value="0" style="width:100%;">
+      </div>
+      <div class="studio-row">
+        <button class="btn btn-secondary btn-sm" id="btn-tl-play">Oynat</button>
+        <button class="btn btn-secondary btn-sm" id="btn-tl-pause">Duraklat</button>
+        <button class="btn btn-secondary btn-sm" id="btn-tl-step">AdÄ±m</button>
+        <button class="btn btn-secondary btn-sm" id="btn-tl-preview">Ã–nizle (t)</button>
+      </div>
+      <div class="studio-row">
+        <button class="btn btn-secondary btn-sm" id="btn-load-timeline">YÃ¼kle</button>
+        <button class="btn btn-secondary btn-sm" id="btn-save-timeline">Kaydet</button>
+        <button class="btn btn-primary btn-sm" id="btn-tl-apply-save">SeÃ§ili Node'u Uygula & Kaydet</button>
+      </div>
+      <div class="field"><label>Timeline (JSON: fps,duration,tracks,keyframes)</label><textarea id="tl-json" rows="5" style="font-family:var(--font-mono);font-size:12px;"></textarea></div>
+      <div id="tl-keyframes" class="muted" style="max-height:120px;overflow:auto;margin-bottom:6px;"></div>
+      <div id="tl-status" class="muted"></div>
+
+      <h3>3D Ãœretim SaÄŸlayÄ±cÄ±larÄ± / Async Job</h3>
+      <div id="providers-list" class="muted">YÃ¼kleniyor...</div>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <div class="field"><label>Provider</label><select id="job-provider"><option value="procedural">procedural</option><option value="external_text_to_3d">external_text_to_3d (hook)</option><option value="external_image_to_3d">external_image_to_3d (hook)</option></select></div>
+        <div class="field"><label>Mode</label><select id="job-mode"><option value="procedural">procedural</option><option value="text_to_3d">text_to_3d</option><option value="image_to_3d">image_to_3d</option></select></div>
+        <div class="field"><label>Prompt / Ä°stek</label><input id="job-prompt" type="text" placeholder="Ã¶rn: metal kÄ±lÄ±Ã§, ahÅŸap masa, insan"></div>
+        <div class="field"><label>SÄ±nÄ±f (opsiyonel, seÃ§ili sÄ±nÄ±f kullanÄ±lÄ±r)</label><input id="job-class-id" type="text" placeholder="class id (boÅŸ bÄ±rakÄ±labilir)"></div>
+        <div class="studio-row">
+          <button class="btn btn-primary btn-sm" id="btn-create-3d-job">Job OluÅŸtur & Ã‡alÄ±ÅŸtÄ±r</button>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-3d-jobs">JoblarÄ± Yenile</button>
+        </div>
+        <div id="jobs-list" class="muted" style="margin-top:6px;max-height:140px;overflow:auto;"></div>
+      </div>
+
+      <h3>Ã–ÄŸrenen Bilgi Modelleri</h3>
+      <div id="learned-knowledge-summary" class="muted">YÃ¼kleniyor...</div>
+    </aside>
+
+    <section class="viewer-wrap" id="viewer-wrap">
+      <div class="viewer-toolbar">
+        <button class="btn btn-secondary btn-sm" id="btn-reset-camera">KamerayÄ± SÄ±fÄ±rla</button>
+        <button class="btn btn-secondary btn-sm" id="btn-frame">Kadrajla</button>
+        <button class="btn btn-secondary btn-sm" id="btn-toggle-grid">Grid</button>
+        <button class="btn btn-secondary btn-sm" id="btn-toggle-physics">Fizik: Kapalı</button>
+      </div>
+      <div id="viewer-canvas"></div>
+      <div class="viewer-status" id="viewer-status">HazÄ±r. Bir sahne seÃ§in ve glTF yÃ¼kleyin.</div>
+    </section>
+  </div>
+
+  </div><!-- /studio-tab-3d -->
+
+  <div id="studio-tab-media" class="studio-tab-panel" style="display:none;">
+    <div class="page-header" style="margin-bottom:12px;">
+      <div>
+        <h1 style="margin:0;font-size:1.4rem;">Video &amp; Medya</h1>
+        <p class="muted" style="margin:4px 0 0;">Video ve 2D görsel üretimi, listeleme, önizleme ve indirme. Studio bağımsız çalışır.</p>
+      </div>
+    </div>
+    <div class="media-wrap">
+      <div class="media-grid">
+        <section class="media-card" aria-label="Video üretimi">
+          <h2>Video Üretimi</h2>
+          <p class="media-muted">Prompt (ve opsiyonel dosya) ile video üretin. Durumu izleyin, önizleyin ve indirin.</p>
+          <form id="media-video-form" class="media-form" enctype="multipart/form-data">
+            {% csrf_token %}
+            <textarea id="media-video-prompt" name="prompt" placeholder="Örnek: Gün batımında deniz kenarında koşan bir at, sinematik..."></textarea>
+            <div class="media-row">
+              <div><label class="media-muted" for="media-video-duration">Süre (sn)</label><input id="media-video-duration" name="duration" type="number" min="1" max="300" value="10"></div>
+              <div><label class="media-muted" for="media-video-format">Format</label><select id="media-video-format" name="format"><option value="mp4">MP4</option><option value="gif">GIF</option><option value="webm">WebM</option></select></div>
+            </div>
+            <div class="media-row">
+              <div><label class="media-muted" for="media-video-resolution">Çözünürlük</label><input id="media-video-resolution" name="resolution" type="text" value="1920x1080" placeholder="1920x1080"></div>
+              <div><label class="media-muted" for="media-video-provider">Provider (opsiyonel)</label><input id="media-video-provider" name="provider" type="text" placeholder="varsayılan"></div>
+            </div>
+            <div>
+              <label class="media-muted" for="media-video-file">Dosya (opsiyonel, görsel/video girdi)</label>
+              <input id="media-video-file" name="file" type="file" accept="video/*,image/*">
+            </div>
+            <div class="media-row">
+              <button type="submit" class="media-btn" id="media-video-submit">Video Üret</button>
+              <button type="button" class="media-btn secondary" id="media-video-reset">Temizle</button>
+            </div>
+          </form>
+          <div class="media-status" id="media-video-status">Hazır.</div>
+          <div class="media-progress"><div id="media-video-progress"></div></div>
+          <video id="media-video-preview" class="media-preview" controls playsinline></video>
+          <div id="media-video-download-wrap" style="display:none;margin-top:8px;"><a id="media-video-download" class="media-btn" href="#" download>Videoyu indir</a></div>
+          <div id="media-video-edit-wrap" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            <h3 style="margin:0 0 6px;font-size:0.95rem;">Video Düzenleme</h3>
+            <form id="media-video-edit-form" class="media-form">
+              <textarea id="media-video-edit-instruction" placeholder="Düzenleme talimatı (örn. ilk 3 saniyeyi kes, hızlandır...)"></textarea>
+              <button type="submit" class="media-btn" id="media-video-edit-submit">Düzenleme isteği gönder</button>
+            </form>
+            <div class="media-status" id="media-video-edit-status"></div>
+          </div>
+        </section>
+
+        <section class="media-card" aria-label="Video işleri">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+            <h2 style="margin:0;">Video İşleri</h2>
+            <button type="button" class="media-btn secondary" id="media-video-refresh" style="padding:6px 10px;font-size:0.8rem;">Yenile</button>
+          </div>
+          <p class="media-muted">Son video üretim/düzenleme işleri. Seçerek önizleyin.</p>
+          <div class="media-jobs" id="media-video-jobs"><div class="media-empty">Yükleniyor...</div></div>
+        </section>
+      </div>
+
+      <div class="media-grid">
+        <section class="media-card" aria-label="2D görsel üretimi">
+          <h2>2D Görsel Üretimi</h2>
+          <p class="media-muted">Prompt ile 2D görsel üretin. Önizleyin ve indirin.</p>
+          <form id="media-image-form" class="media-form">
+            {% csrf_token %}
+            <textarea id="media-image-prompt" name="prompt" placeholder="Örnek: sisli bir ormanda parlayan mantarlar, dijital sanat..."></textarea>
+            <div class="media-row">
+              <div><label class="media-muted" for="media-image-width">Genişlik</label><input id="media-image-width" name="width" type="number" min="64" max="2048" value="1024"></div>
+              <div><label class="media-muted" for="media-image-height">Yükseklik</label><input id="media-image-height" name="height" type="number" min="64" max="2048" value="1024"></div>
+            </div>
+            <div class="media-row">
+              <div><label class="media-muted" for="media-image-format">Format</label><select id="media-image-format" name="format"><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WEBP</option></select></div>
+              <div><label class="media-muted" for="media-image-provider">Provider (opsiyonel)</label><input id="media-image-provider" name="provider" type="text" placeholder="varsayılan"></div>
+            </div>
+            <div class="media-row">
+              <button type="submit" class="media-btn" id="media-image-submit">Görsel Üret</button>
+              <button type="button" class="media-btn secondary" id="media-image-reset">Temizle</button>
+            </div>
+          </form>
+          <div class="media-status" id="media-image-status">Hazır.</div>
+          <div class="media-progress"><div id="media-image-progress"></div></div>
+          <img id="media-image-preview" class="media-preview-img" alt="Üretilen görsel önizleme">
+          <div id="media-image-download-wrap" style="display:none;margin-top:8px;"><a id="media-image-download" class="media-btn" href="#" download>Görseli indir</a></div>
+        </section>
+
+        <section class="media-card" aria-label="Görsel işleri">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+            <h2 style="margin:0;">Görsel İşleri</h2>
+            <button type="button" class="media-btn secondary" id="media-image-refresh" style="padding:6px 10px;font-size:0.8rem;">Yenile</button>
+          </div>
+          <p class="media-muted">Son 2D görsel işleri. Seçerek önizleyin.</p>
+          <div class="media-jobs" id="media-image-jobs"><div class="media-empty">Yükleniyor...</div></div>
+        </section>
+      </div>
+    </div>
+  </div><!-- /studio-tab-media -->
+
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtilsPkg from 'three/addons/utils/SkeletonUtils.js';
+
+let CANNON = null;
+let physicsEnabled = false;
+let physicsWorld = null;
+let physicsBodies = new Map(); // nodeId -> { body, object3d }
+let physicsGroundBody = null;
+let lastPhysicsTime = null;
+
+async function ensurePhysicsEngine() {
+  if (CANNON) return CANNON;
+  try {
+    CANNON = await import('cannon-es');
+    return CANNON;
+  } catch (e) {
+    console.warn('cannon-es yüklenemedi, pratik simülasyon fallback kullanılacak.', e);
+    CANNON = null;
+    return null;
+  }
+}
+
+function initPhysicsWorld() {
+  if (!CANNON) return;
+  physicsWorld = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.81, 0) });
+  physicsWorld.broadphase = new CANNON.NaiveBroadphase();
+  physicsWorld.solver.iterations = 10;
+  const groundMat = new CANNON.Material('ground');
+  physicsGroundBody = new CANNON.Body({ mass: 0, material: groundMat, shape: new CANNON.Plane() });
+  physicsGroundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  physicsWorld.addBody(physicsGroundBody);
+  physicsBodies.clear();
+}
+
+function disposePhysicsWorld() {
+  physicsWorld = null;
+  physicsBodies.clear();
+  physicsGroundBody = null;
+  lastPhysicsTime = null;
+}
+
+function syncPhysicsBodiesFromScene() {
+  if (!physicsWorld || !CANNON || !state.currentScene) return;
+  const seen = new Set();
+  for (const node of (state.currentScene.nodes || [])) {
+    const comps = node.components || {};
+    const phys = comps.physics || {};
+    const enabled = !!phys.enabled && String(phys.body || 'dynamic').toLowerCase() !== 'static-only-ignore';
+    const obj = state.assetObjectMap[node.asset_id] || (node.asset_id ? state.assetObjectMap[node.asset_id] : null);
+    if (!enabled || !obj) continue;
+    seen.add(node.id);
+    let entry = physicsBodies.get(node.id);
+    const mass = String(phys.body || 'dynamic').toLowerCase() === 'static' ? 0 : Math.max(0, Number(phys.mass || 1));
+    // approximate box collider from object bounds
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const sx = Math.max(0.05, size.x || 1), sy = Math.max(0.05, size.y || 1), sz = Math.max(0.05, size.z || 1);
+    if (!entry) {
+      const shape = new CANNON.Box(new CANNON.Vec3(sx/2, sy/2, sz/2));
+      const body = new CANNON.Body({ mass, shape });
+      physicsWorld.addBody(body);
+      entry = { body, object3d: obj };
+      physicsBodies.set(node.id, entry);
+    } else {
+      entry.object3d = obj;
+      entry.body.mass = mass;
+      entry.body.updateMassProperties();
+    }
+    // set transform from components
+    const t = comps.transform || {};
+    const pos = Array.isArray(t.position) ? t.position : [center.x, center.y, center.z];
+    const rot = Array.isArray(t.rotation) ? t.rotation : [0,0,0];
+    entry.body.position.set(Number(pos[0]||0), Number(pos[1]||0), Number(pos[2]||0));
+    const q = new CANNON.Quaternion();
+    q.setFromEuler(Number(rot[0]||0), Number(rot[1]||0), Number(rot[2]||0), 'XYZ');
+    entry.body.quaternion.copy(q);
+    const vel = (phys.velocity && Array.isArray(phys.velocity)) ? phys.velocity : [0,0,0];
+    entry.body.velocity.set(Number(vel[0]||0), Number(vel[1]||0), Number(vel[2]||0));
+    // apply last impulse once
+    const imp = phys.last_impulse || null;
+    if (imp && imp._applied_once !== true) {
+      const f = Array.isArray(imp.force) ? imp.force : [0,0,0];
+      try { entry.body.applyImpulse(new CANNON.Vec3(Number(f[0]||0), Number(f[1]||0), Number(f[2]||0))); } catch(e) {}
+      imp._applied_once = true;
+    }
+  }
+  // remove stale
+  for (const [nid, entry] of [...physicsBodies.entries()]) {
+    if (!seen.has(nid)) {
+      try { physicsWorld.removeBody(entry.body); } catch(e) {}
+      physicsBodies.delete(nid);
+    }
+  }
+}
+
+function stepPhysicsWorld(nowMs) {
+  if (!physicsEnabled || !physicsWorld || !CANNON) { lastPhysicsTime = nowMs; return; }
+  if (state.tlPreviewActive || state.tlPlaying) { lastPhysicsTime = nowMs; return; } // don't fight timeline preview
+  if (lastPhysicsTime == null) lastPhysicsTime = nowMs;
+  const dt = Math.min(0.05, Math.max(0, (nowMs - lastPhysicsTime) / 1000));
+  lastPhysicsTime = nowMs;
+  if (dt <= 0) return;
+  physicsWorld.step(1/60, dt, 3);
+  for (const [nid, entry] of physicsBodies.entries()) {
+    const obj = entry.object3d; const body = entry.body; if (!obj || !body) continue;
+    obj.position.set(body.position.x, body.position.y, body.position.z);
+    obj.quaternion.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w);
+  }
+}
+
+async function togglePhysicsSimulation() {
+  if (!physicsEnabled) {
+    await ensurePhysicsEngine();
+    if (!CANNON) { alert('Fizik motoru (cannon-es) yüklenemedi. Pratik timeline simülasyonu kullanılabilir.'); return; }
+    initPhysicsWorld();
+    syncPhysicsBodiesFromScene();
+    physicsEnabled = true;
+    setStatus('Gerçek zamanlı fizik simülasyonu (cannon-es) etkin.');
+  } else {
+    physicsEnabled = false;
+    disposePhysicsWorld();
+    setStatus('Fizik simülasyonu kapatıldı.');
+  }
+  updatePhysicsButton();
+}
+
+function updatePhysicsButton() {
+  const btn = el('btn-toggle-physics');
+  if (btn) btn.textContent = physicsEnabled ? 'Fizik: Açık' : 'Fizik: Kapalı';
+}
+
+const state = {
+  scenes: [],
+  currentScene: null,
+  selectedId: null,
+  selectedNodeId: null,
+  classes: [],
+  selectedClassId: null,
+  timeline: { fps: 30, duration: 10, tracks: [], keyframes: [] },
+  tlTime: 0,
+  tlPlaying: false,
+  tlTimer: null,
+  tlPreviewActive: false,
+  assetObjectMap: {}, // assetId -> THREE.Object3D
+  jobs: [],
+};
+
+const el = (id) => document.getElementById(id);
+const sceneListEl = el('scene-list');
+const nodeListEl = el('node-list');
+const sceneMetaEl = el('scene-meta');
+const statusEl = el('viewer-status');
+const classListEl = el('class-list');
+
+function setStatus(msg) { statusEl.textContent = msg; }
+
+async function api(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { 'Accept': 'application/json', ...(opts.headers || {}) },
+    credentials: 'same-origin',
+    ...opts,
+  });
+  const ct = res.headers.get('content-type') || '';
+  const data = ct.includes('application/json') ? await res.json() : { ok: res.ok, text: await res.text() };
+  if (!res.ok || data.ok === false) throw new Error(data.error || data.detail || ('HTTP ' + res.status));
+  return data;
+}
+
+// ===== Three.js viewer =====
+let renderer, scene3d, camera, controls, grid, currentRoot = null;
+const container = el('viewer-canvas');
+const wrap = el('viewer-wrap');
+
+function initViewer() {
+  scene3d = new THREE.Scene();
+  scene3d.background = new THREE.Color(0x0b1020);
+
+  camera = new THREE.PerspectiveCamera(50, 1, 0.01, 2000);
+  camera.position.set(3, 2, 4);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  container.innerHTML = '';
+  container.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.target.set(0, 1, 0);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x334155, 1.0);
+  scene3d.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+  dir.position.set(5, 10, 7);
+  scene3d.add(dir);
+
+  grid = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+  scene3d.add(grid);
+  const axes = new THREE.AxesHelper(1.5);
+  scene3d.add(axes);
+
+  window.addEventListener('resize', onResize);
+  onResize();
+  animate();
+}
+
+function onResize() {
+  const w = wrap.clientWidth || 800;
+  const h = wrap.clientHeight || 500;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  try { stepPhysicsWorld(now || performance.now()); } catch(e) {}
+  controls.update();
+  renderer.render(scene3d, camera);
+}
+
+function clearCurrentRoot() {
+  if (!currentRoot) return;
+  scene3d.remove(currentRoot);
+  currentRoot.traverse((obj) => {
+    if (obj.geometry) obj.geometry.dispose?.();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => {
+        for (const k in m) { if (m[k] && m[k].isTexture) m[k].dispose?.(); }
+        m.dispose?.();
+      });
+    }
+  });
+  currentRoot = null;
+}
+
+function frameObject(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  if (!isFinite(size.length()) || size.length() === 0) return;
+  const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+  const dist = maxDim * 1.6 / Math.tan((camera.fov * Math.PI) / 360);
+  const dirv = new THREE.Vector3(1, 0.8, 1).normalize();
+  camera.position.copy(center.clone().add(dirv.multiplyScalar(dist)));
+  controls.target.copy(center);
+  camera.near = Math.max(dist / 100, 0.01);
+  camera.far = dist * 100;
+  camera.updateProjectionMatrix();
+  controls.update();
+}
+
+function applyPoseToObject3D(object3d, pose) {
+  if (!object3d || !pose || typeof pose !== 'object') return 0;
+  let applied = 0;
+  const poseMap = pose;
+  object3d.traverse((o) => {
+    const name = o && (o.name || '');
+    if (!name) return;
+    const p = poseMap[name];
+    if (!p || typeof p !== 'object') return;
+    // rotation as [x,y,z] euler radians
+    if (Array.isArray(p.rotation) && p.rotation.length === 3) {
+      try { o.rotation.set(Number(p.rotation[0]||0), Number(p.rotation[1]||0), Number(p.rotation[2]||0)); applied++; } catch(e) {}
+    }
+    if (Array.isArray(p.position) && p.position.length === 3) {
+      try { o.position.set(Number(p.position[0]||0), Number(p.position[1]||0), Number(p.position[2]||0)); applied++; } catch(e) {}
+    }
+    if (Array.isArray(p.scale) && p.scale.length === 3) {
+      try { o.scale.set(Number(p.scale[0]||1), Number(p.scale[1]||1), Number(p.scale[2]||1)); applied++; } catch(e) {}
+    }
+  });
+  // also try skeleton bones on skinned meshes
+  object3d.traverse((o) => {
+    if (!o || !o.isSkinnedMesh || !o.skeleton || !Array.isArray(o.skeleton.bones)) return;
+    for (const bone of o.skeleton.bones) {
+      const p = poseMap[bone.name]; if (!p) continue;
+      if (Array.isArray(p.rotation) && p.rotation.length === 3) {
+        try { bone.rotation.set(Number(p.rotation[0]||0), Number(p.rotation[1]||0), Number(p.rotation[2]||0)); applied++; } catch(e) {}
+      }
+      if (Array.isArray(p.position) && p.position.length === 3) {
+        try { bone.position.set(Number(p.position[0]||0), Number(p.position[1]||0), Number(p.position[2]||0)); } catch(e) {}
+      }
+    }
+  });
+  return applied;
+}
+
+function applyNodeTransformToViewer(nodeId, components) {
+  if (!currentRoot || !state.currentScene) return;
+  const node = (state.currentScene.nodes || []).find(n => n.id === nodeId);
+  if (!node) return;
+  const aid = node.asset_id || components?.mesh?.asset_id;
+  if (!aid) return;
+  const obj = state.assetObjectMap[aid];
+  if (!obj) return;
+  const comps = components || node.components || {};
+  const t = comps.transform;
+  if (t) {
+    if (Array.isArray(t.position)) obj.position.fromArray(t.position);
+    if (Array.isArray(t.rotation)) obj.rotation.set(t.rotation[0] || 0, t.rotation[1] || 0, t.rotation[2] || 0);
+    if (Array.isArray(t.scale)) obj.scale.fromArray(t.scale);
+  }
+  // apply pose to matching bones/named nodes (supports rigged/skinned GLTFs)
+  const pose = comps.animation?.pose || (components && components.pose) || null;
+  if (pose) {
+    try { applyPoseToObject3D(obj, pose); } catch(e) {}
+  }
+}
+
+function resetViewerToSceneTransforms() {
+  if (!state.currentScene) return;
+  for (const n of (state.currentScene.nodes || [])) {
+    applyNodeTransformToViewer(n.id, n.components || {});
+  }
+}
+
+async function loadAssetsForScene(sceneData) {
+  clearCurrentRoot();
+  state.assetObjectMap = {};
+  const group = new THREE.Group();
+  group.name = 'SceneRoot';
+  scene3d.add(group);
+  currentRoot = group;
+
+  const assets = (sceneData.assets || []).filter(a => a.file_type === 'gltf' && a.url);
+  if (!assets.length) {
+    setStatus('Sahne yÃ¼klendi (glTF varlÄ±k yok). Bir glTF/glb yÃ¼kleyin.');
+    return;
+  }
+
+  const loader = new GLTFLoader();
+  let loaded = 0;
+  for (const asset of assets) {
+    try {
+      const gltf = await loader.loadAsync(asset.url);
+      const root = gltf.scene || gltf.scenes?.[0];
+      if (root) {
+        root.userData.assetId = asset.id;
+        root.userData.assetName = asset.name;
+        state.assetObjectMap[asset.id] = root;
+        const node = (sceneData.nodes || []).find(n => n.asset_id === asset.id || n.components?.mesh?.asset_id === asset.id);
+        const t = node?.components?.transform;
+        if (t) {
+          if (Array.isArray(t.position)) root.position.fromArray(t.position);
+          if (Array.isArray(t.rotation)) root.rotation.set(t.rotation[0] || 0, t.rotation[1] || 0, t.rotation[2] || 0);
+          if (Array.isArray(t.scale)) root.scale.fromArray(t.scale);
+        }
+        group.add(root);
+        loaded++;
+      }
+    } catch (e) {
+      console.warn('GLTF load failed', asset, e);
+    }
+  }
+  if (loaded > 0) {
+    frameObject(group);
+    setStatus(`Sahne yÃ¼klendi: ${loaded} glTF varlÄ±k gÃ¶rÃ¼ntÃ¼leniyor.`);
+  } else {
+    setStatus('glTF varlÄ±klarÄ± yÃ¼klenemedi (dosya eriÅŸimi/CORS/format kontrol edin).');
+  }
+}
+
+// ===== UI/data =====
+function renderSceneList() {
+  if (!state.scenes.length) {
+    sceneListEl.innerHTML = '<li class="muted">HenÃ¼z sahne yok. "Yeni Sahne" oluÅŸturun.</li>';
+    return;
+  }
+  sceneListEl.innerHTML = state.scenes.map(s => `
+    <li class="studio-item ${s.id === state.selectedId ? 'active' : ''}" data-id="${s.id}">
+      <strong>${escapeHtml(s.name || 'Sahne')}</strong>
+      <small>${escapeHtml(s.id.slice(0,8))} â€¢ ${new Date(s.updated_at || s.created_at || Date.now()).toLocaleString()}</small>
+    </li>
+  `).join('');
+  sceneListEl.querySelectorAll('.studio-item').forEach(item => {
+    item.addEventListener('click', () => selectScene(item.dataset.id));
+  });
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+state.selectedNodeId = null;
+
+function renderSceneMeta(scene) {
+  if (!scene) { sceneMetaEl.textContent = 'Sahne seÃ§ilmedi.'; nodeListEl.textContent = 'Sahne seÃ§ilmedi.'; el('node-editor').style.display='none'; return; }
+  sceneMetaEl.innerHTML = `<div><strong>${escapeHtml(scene.name)}</strong></div>
+    <div class="muted">ID: ${escapeHtml(scene.id)}</div>
+    <div class="muted">VarlÄ±k: ${(scene.assets||[]).length} â€¢ DÃ¼ÄŸÃ¼m: ${(scene.nodes||[]).length}</div>`;
+  const nodes = scene.nodes || [];
+  if (!nodes.length) { nodeListEl.innerHTML = '<div class="muted">DÃ¼ÄŸÃ¼m yok.</div>'; el('node-editor').style.display='none'; return; }
+  nodeListEl.innerHTML = nodes.map(n => {
+    const bones = n.components?.skeleton?.bones || [];
+    const boneInfo = bones.length ? ` â€¢ kemik: ${bones.length}` : '';
+    const active = n.id === state.selectedNodeId ? 'style="background:var(--accent-bg);"' : '';
+    return `<div class="node-row" data-nid="${n.id}" ${active}>â€¢ <strong>${escapeHtml(n.name)}</strong> <span class="muted">(${escapeHtml(n.node_type)}${boneInfo})</span></div>`;
+  }).join('');
+  nodeListEl.querySelectorAll('[data-nid]').forEach(row => row.addEventListener('click', () => selectNode(row.dataset.nid)));
+  if (state.selectedNodeId && !nodes.find(n=>n.id===state.selectedNodeId)) { state.selectedNodeId = null; el('node-editor').style.display='none'; }
+  if (state.selectedNodeId) selectNode(state.selectedNodeId, true);
+}
+
+function selectNode(id, silent) {
+  state.selectedNodeId = id;
+  const scene = state.currentScene; if (!scene) return;
+  const n = (scene.nodes || []).find(x => x.id === id);
+  if (!n) { el('node-editor').style.display='none'; return; }
+  if (!silent) renderSceneMeta(scene);
+  el('node-editor').style.display = 'block';
+  el('ne-name').value = n.name || '';
+  el('ne-visible').value = n.visible ? 'true' : 'false';
+  const comps = n.components || {};
+  el('ne-transform').value = JSON.stringify(comps.transform || {position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}, null, 2);
+  el('ne-identity').value = JSON.stringify(comps.identity || {}, null, 2);
+  el('ne-skeleton').value = JSON.stringify(comps.skeleton || {bones:[]}, null, 2);
+  el('ne-animation').value = JSON.stringify(comps.animation || {pose:{}, keyframes:[], clips:[]}, null, 2);
+  el('ne-physics').value = JSON.stringify(comps.physics || {}, null, 2);
+  el('ne-meta').textContent = `id: ${n.id.slice(0,8)} â€¢ tip: ${n.node_type} â€¢ asset: ${(n.asset_id||'').slice(0,8) || '-'}`;
+}
+
+async function saveSelectedNode() {
+  const sid = state.selectedId, nid = state.selectedNodeId; if (!sid || !nid) return;
+  try {
+    const components = {
+      ...( (state.currentScene.nodes||[]).find(x=>x.id===nid)?.components || {} ),
+      transform: parseJsonField(el('ne-transform').value, {position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),
+      identity: parseJsonField(el('ne-identity').value, {}),
+      skeleton: parseJsonField(el('ne-skeleton').value, {bones:[]}),
+      animation: parseJsonField(el('ne-animation').value, {}),
+      physics: parseJsonField(el('ne-physics').value, {}),
+    };
+    await api(`/api/scenes/${sid}/nodes/${nid}/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({ name: el('ne-name').value.trim(), visible: el('ne-visible').value === 'true', components })
+    });
+    await selectScene(sid, true);
+    selectNode(nid);
+    setStatus('Node kaydedildi ve sahne gÃ¼ncellendi.');
+  } catch (e) { alert('Node kaydetme hatasÄ±: ' + e.message); }
+}
+
+async function deleteSelectedNode() {
+  const sid = state.selectedId, nid = state.selectedNodeId; if (!sid || !nid) return;
+  if (!confirm('Node silinsin mi?')) return;
+  try {
+    await api(`/api/scenes/${sid}/nodes/${nid}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') || '' } });
+    state.selectedNodeId = null; el('node-editor').style.display='none';
+    await selectScene(sid, true);
+    setStatus('Node silindi.');
+  } catch (e) { alert('Silme hatasÄ±: ' + e.message); }
+}
+
+async function duplicateSelectedNode() {
+  const sid = state.selectedId, nid = state.selectedNodeId; if (!sid || !nid) return;
+  const n = (state.currentScene?.nodes || []).find(x => x.id === nid); if (!n) return;
+  try {
+    const comps = JSON.parse(JSON.stringify(n.components || {}));
+    if (comps.transform && Array.isArray(comps.transform.position)) comps.transform.position = [comps.transform.position[0]+0.3, comps.transform.position[1], comps.transform.position[2]];
+    await api(`/api/scenes/${sid}/nodes/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({ name: (n.name||'Node') + ' Kopya', node_type: n.node_type, asset_id: n.asset_id, parent_id: n.parent_id, components: comps, visible: n.visible, sort_order: (n.sort_order||0)+1 })
+    });
+    await selectScene(sid, true);
+    setStatus('Node Ã§oÄŸaltÄ±ldÄ±.');
+  } catch (e) { alert('Ã‡oÄŸaltma hatasÄ±: ' + e.message); }
+}
+
+async function applySelectedAction() {
+  const sid = state.selectedId, nid = state.selectedNodeId; if (!sid || !nid) return;
+  const action = el('ne-action').value;
+  try {
+    await api(`/api/scenes/${sid}/nodes/${nid}/action/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({ action })
+    });
+    await selectScene(sid, true); selectNode(nid);
+    setStatus(`Eylem uygulandÄ±: ${action}`);
+  } catch (e) { alert('Eylem hatasÄ±: ' + e.message); }
+}
+
+function renderTimelineUI() {
+  const tl = state.timeline || {fps:30,duration:10,keyframes:[],tracks:[]};
+  const dur = Number(tl.duration || 10);
+  const scrub = el('tl-scrub');
+  if (scrub) { scrub.min = 0; scrub.max = String(dur); scrub.step = String(1 / Math.max(1, Number(tl.fps||30))); scrub.value = String(state.tlTime || 0); }
+  const tlabel = el('tl-time-label'); if (tlabel) tlabel.textContent = `${Number(state.tlTime||0).toFixed(2)}s`;
+  const dlabel = el('tl-duration-label'); if (dlabel) dlabel.textContent = `${dur.toFixed(2)}s`;
+  const kfDiv = el('tl-keyframes');
+  if (kfDiv) {
+    const kfs = Array.isArray(tl.keyframes) ? tl.keyframes : [];
+    if (!kfs.length) kfDiv.innerHTML = '<span class="muted">Keyframe yok.</span>';
+    else kfDiv.innerHTML = '<strong>Keyframes:</strong><br>' + kfs.slice(0,40).map((k,i)=>{
+      const nid = (k.node_id||'global');
+      const short = String(nid).slice(0,8);
+      return `<div>• t=${Number(k.time||0).toFixed(2)}s node=${escapeHtml(short)} ${k.action?('action='+escapeHtml(k.action)) : ''}</div>`;
+    }).join('');
+  }
+}
+
+async function loadTimeline() {
+  if (!state.selectedId) return;
+  try {
+    const data = await api(`/api/scenes/${state.selectedId}/timeline/`);
+    state.timeline = data.timeline || {fps:30,duration:10,tracks:[],keyframes:[]};
+    el('tl-json').value = JSON.stringify(state.timeline, null, 2);
+    state.tlTime = Math.min(state.tlTime || 0, Number(state.timeline.duration || 10));
+    renderTimelineUI();
+    el('tl-status').textContent = 'Timeline yüklendi.';
+  } catch (e) { el('tl-status').textContent = 'Timeline yüklenemedi: ' + e.message; }
+}
+
+async function saveTimeline() {
+  if (!state.selectedId) return;
+  try {
+    const timeline = parseJsonField(el('tl-json').value, {fps:30,duration:10,tracks:[],keyframes:[]});
+    const data = await api(`/api/scenes/${state.selectedId}/timeline/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({ timeline })
+    });
+    state.timeline = data.timeline || timeline;
+    el('tl-json').value = JSON.stringify(state.timeline, null, 2);
+    renderTimelineUI();
+    el('tl-status').textContent = 'Timeline kaydedildi.';
+  } catch (e) { alert('Timeline kaydetme hatası: ' + e.message); }
+}
+
+async function captureKeyframe() {
+  if (!state.selectedId) return;
+  const n = (state.currentScene?.nodes || []).find(x => x.id === state.selectedNodeId);
+  let timeline = state.timeline || {fps:30,duration:10,tracks:[],keyframes:[]};
+  try { timeline = parseJsonField(el('tl-json').value || JSON.stringify(timeline), timeline); } catch(e) {}
+  const t = Number(state.tlTime || 0);
+  const kf = { time: t, node_id: n?.id || null, transform: n?.components?.transform || null, pose: n?.components?.animation?.pose || null, physics: n?.components?.physics || null, action: n?.components?.animation?.active_action || null };
+  timeline.keyframes = Array.isArray(timeline.keyframes) ? timeline.keyframes : [];
+  timeline.keyframes.push(kf);
+  timeline.keyframes.sort((a,b)=>Number(a.time||0)-Number(b.time||0));
+  state.timeline = timeline;
+  el('tl-json').value = JSON.stringify(timeline, null, 2);
+  await saveTimeline();
+  setStatus('Keyframe yakalandı (timeline kaydedildi).');
+}
+
+async function previewTimelineAt(t, persist=false) {
+  if (!state.selectedId) return;
+  const time = Math.max(0, Math.min(Number(state.timeline?.duration || 10), Number(t || 0)));
+  state.tlTime = time;
+  renderTimelineUI();
+  try {
+    const data = await api(`/api/scenes/${state.selectedId}/timeline/state/?t=${encodeURIComponent(time)}`);
+    const previews = data.node_previews || {};
+    state.tlPreviewActive = !persist;
+    for (const [nid, pv] of Object.entries(previews)) {
+      if (pv && pv.components) {
+        applyNodeTransformToViewer(nid, pv.components);
+        if (nid === state.selectedNodeId && !persist) {
+          try {
+            el('ne-transform').value = JSON.stringify(pv.components.transform || {}, null, 2);
+            el('ne-animation').value = JSON.stringify(pv.components.animation || {}, null, 2);
+            el('ne-physics').value = JSON.stringify(pv.components.physics || {}, null, 2);
+          } catch(e) {}
+        }
+      }
+    }
+    if (persist) {
+      const ids = state.selectedNodeId ? [state.selectedNodeId] : Object.keys(previews);
+      for (const nid of ids) {
+        const pv = previews[nid]; if (!pv || !pv.components) continue;
+        await api(`/api/scenes/${state.selectedId}/nodes/${nid}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+          body: JSON.stringify({ components: pv.components })
+        });
+      }
+      await selectScene(state.selectedId, true);
+      setStatus('Timeline durumu nodlara uygulandı ve kaydedildi.');
+      state.tlPreviewActive = false;
+    } else {
+      el('tl-status').textContent = `Önizleme: ${time.toFixed(2)}s (kalıcı değil)`;
+    }
+  } catch (e) {
+    console.warn(e);
+    el('tl-status').textContent = 'Timeline önizleme hatası: ' + e.message;
+  }
+}
+
+function stopTimelinePlayback() {
+  state.tlPlaying = false;
+  if (state.tlTimer) { clearInterval(state.tlTimer); state.tlTimer = null; }
+  const btn = el('btn-tl-play'); if (btn) btn.textContent = 'Oynat';
+}
+
+async function playTimeline() {
+  if (!state.selectedId) return;
+  if (state.tlPlaying) { stopTimelinePlayback(); return; }
+  state.tlPlaying = true;
+  const btn = el('btn-tl-play'); if (btn) btn.textContent = 'Durdur';
+  const tl = state.timeline || {fps:30,duration:10};
+  const fps = Math.max(1, Number(tl.fps||30));
+  const dur = Math.max(0.1, Number(tl.duration||10));
+  const dt = 1.0 / fps;
+  if (state.tlTimer) clearInterval(state.tlTimer);
+  state.tlTimer = setInterval(async () => {
+    if (!state.tlPlaying) return;
+    let t = Number(state.tlTime || 0) + dt;
+    if (t > dur) { t = dur; stopTimelinePlayback(); }
+    previewTimelineAt(t, false);
+  }, Math.max(33, Math.floor(1000 / fps)));
+}
+
+async function stepTimeline() {
+  const tl = state.timeline || {fps:30,duration:10};
+  const dt = 1.0 / Math.max(1, Number(tl.fps||30));
+  await previewTimelineAt(Number(state.tlTime||0) + dt, false);
+}
+
+async function loadProviders() {
+  try {
+    const data = await api('/api/generation-providers/');
+    const ps = data.providers || [];
+    const sel = el('job-provider');
+    if (sel) {
+      const cur = sel.value;
+      sel.innerHTML = ps.map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.id)} ${p.available ? '' : '(hook)'}</option>`).join('') || '<option value="procedural">procedural</option>';
+      if ([...sel.options].some(o=>o.value===cur)) sel.value = cur;
+    }
+    el('providers-list').innerHTML = ps.map(p => `<div>• <strong>${escapeHtml(p.name)}</strong> ${p.available ? '(hazır)' : '(hook)'} <span class="muted">${escapeHtml(p.note||'')}</span></div>`).join('') +
+      `<div class="muted" style="margin-top:4px;">Tutarlılık: locked_fields korunur, stable_id korunur. Async job akışı desteklenir.</div>`;
+  } catch(e) {
+    el('providers-list').textContent = 'Sağlayıcı bilgisi alınamadı.';
+  }
+}
+
+async function load3DJobs() {
+  const box = el('jobs-list'); if (!box) return;
+  try {
+    const data = await api('/api/3d-jobs/');
+    state.jobs = data.jobs || [];
+    if (!state.jobs.length) { box.innerHTML = '<div class="muted">Job yok.</div>'; return; }
+    box.innerHTML = state.jobs.slice(0,20).map(j => {
+      const out = j.output_asset_url ? `<a href="${escapeHtml(j.output_asset_url)}" target="_blank">çıktı</a>` : '';
+      return `<div style="margin-bottom:4px;">• <strong>${escapeHtml((j.provider||'')+'/'+(j.mode||''))}</strong> <span class="muted">${escapeHtml(j.status||'')} %${j.progress||0} ${j.error?('• '+escapeHtml(j.error).slice(0,80)):''}</span> ${out}</div>`;
+    }).join('');
+  } catch(e) {
+    box.textContent = 'Job listesi alınamadı: ' + e.message;
+  }
+}
+
+async function create3DJob() {
+  if (!state.selectedId) { alert('Önce bir sahne seçin.'); return; }
+  const provider = (el('job-provider')?.value || 'procedural').trim();
+  const mode = (el('job-mode')?.value || 'procedural').trim();
+  const prompt = (el('job-prompt')?.value || '').trim();
+  const clsInput = (el('job-class-id')?.value || '').trim();
+  const classId = clsInput || state.selectedClassId || null;
+  setStatus('3D job oluşturuluyor/çalıştırılıyor...');
+  try {
+    const body = { scene_id: state.selectedId, provider, mode, prompt, run: true, background: false };
+    if (classId) body.entity_class_id = classId;
+    if (state.selectedClassId && classId === state.selectedClassId) {
+      try { body.parameters = parseJsonField(el('ce-params')?.value || '{}', {}); } catch(e) { body.parameters = {}; }
+    }
+    const data = await api('/api/3d-jobs/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify(body)
+    });
+    await load3DJobs();
+    await selectScene(state.selectedId, true);
+    setStatus('3D job tamamlandı/güncellendi: ' + (data.job?.status || ''));
+  } catch(e) {
+    alert('3D job hatası: ' + e.message);
+    setStatus('3D job hatası: ' + e.message);
+    await load3DJobs();
+  }
+}
+
+async function loadLearnedKnowledgeSummary() {
+  const elSum = el('learned-knowledge-summary');
+  if (!elSum) return;
+  try {
+    const [eRes, vRes] = await Promise.all([
+      api('/api/learned-knowledge/entities/').catch(() => ({items:[]})),
+      api('/api/learned-knowledge/video/').catch(() => ({items:[]})),
+    ]);
+    const entities = eRes.items || [];
+    const videos = vRes.items || [];
+    const entHtml = entities.length ? entities.slice(0,5).map(i => `<div>â€¢ <strong>${escapeHtml(i.concept||'?')}</strong> <span class="muted">(katman:${i.hierarchy_levels||0}, araÅŸtÄ±rma:${i.research_count||0}, gÃ¼ven:${Number(i.confidence||0).toFixed(2)})</span></div>`).join('') : '<div class="muted">HenÃ¼z Ã¶ÄŸrenilmiÅŸ 3D varlÄ±k yok.</div>';
+    const vidHtml = videos.length ? videos.slice(0,3).map(i => `<div>â€¢ Video modeli <span class="muted">(baÅŸarÄ±lÄ±:${i.successful_jobs||0}, insight:${i.insights_count||0})</span></div>`).join('') : '<div class="muted">HenÃ¼z Ã¶ÄŸrenilmiÅŸ video modeli yok.</div>';
+    elSum.innerHTML = `<div><strong>3D (ayrÄ± model):</strong></div>${entHtml}<div style="margin-top:6px;"><strong>Video (ayrÄ± model):</strong></div>${vidHtml}`;
+  } catch(e) {
+    elSum.textContent = 'Ã–ÄŸrenen bilgi alÄ±namadÄ±.';
+  }
+}
+
+async function refreshScenes() {
+  const data = await api('/api/scenes/');
+  state.scenes = data.scenes || [];
+  renderSceneList();
+  if (state.selectedId) {
+    const exists = state.scenes.find(s => s.id === state.selectedId);
+    if (exists) await selectScene(state.selectedId, true);
+  }
+}
+
+state.classes = [];
+state.selectedClassId = null;
+
+function parseJsonField(text, fallback) {
+  const t = (text || '').trim();
+  if (!t) return fallback;
+  try { return JSON.parse(t); } catch (e) { throw new Error('GeÃ§ersiz JSON'); }
+}
+
+function renderClassList() {
+  const classes = state.classes || [];
+  if (!classes.length) { classListEl.innerHTML = '<div class="muted">SÄ±nÄ±f yok.</div>'; return; }
+  classListEl.innerHTML = classes.map(c => `
+    <div class="studio-item ${c.id === state.selectedClassId ? 'active' : ''}" data-cid="${c.id}">
+      <strong>${escapeHtml(c.name)}</strong>
+      <small>${escapeHtml(c.category)}${c.is_system ? ' â€¢ sistem' : ''}${c.skeleton_template?.bones?.length ? ' â€¢ kemik: '+c.skeleton_template.bones.length : ''}</small>
+    </div>
+  `).join('');
+  classListEl.querySelectorAll('[data-cid]').forEach(item => {
+    item.addEventListener('click', () => selectClass(item.dataset.cid));
+  });
+}
+
+function selectClass(id) {
+  state.selectedClassId = id;
+  renderClassList();
+  const c = (state.classes || []).find(x => x.id === id);
+  const ed = el('class-editor');
+  if (!c) { ed.style.display = 'none'; return; }
+  ed.style.display = 'block';
+  el('ce-name').value = c.name || '';
+  el('ce-category').value = c.category || 'other';
+  el('ce-desc').value = c.description || '';
+  el('ce-params').value = JSON.stringify(c.parameters || {}, null, 2);
+  el('ce-components').value = JSON.stringify(c.components_template || {}, null, 2);
+  el('ce-skeleton').value = JSON.stringify(c.skeleton_template || {}, null, 2);
+  el('ce-render').value = JSON.stringify(c.render_template || {}, null, 2);
+  const editable = !c.is_system;
+  ['ce-name','ce-category','ce-desc','ce-params','ce-components','ce-skeleton','ce-render'].forEach(id => { el(id).disabled = !editable; });
+  el('btn-save-class').disabled = !editable;
+  el('btn-delete-class').disabled = !editable;
+  const hier = (c.skeleton_template && c.skeleton_template.hierarchy) || (c.components_template && c.components_template.skeleton && c.components_template.skeleton.hierarchy) || null;
+  const layers = hier && Array.isArray(hier.layers) ? hier.layers.length : 0;
+  const learned = layers ? ` â€¢ bottom-up katman: ${layers}` : ' â€¢ Ã¶ÄŸrenilmiÅŸ hiyerarÅŸi: yok';
+  el('ce-meta').textContent = `${c.is_system ? 'Sistem sÄ±nÄ±fÄ± (salt okunur)' : 'KullanÄ±cÄ± sÄ±nÄ±fÄ± (dÃ¼zenlenebilir/Ã¶ÄŸrenen)'} â€¢ v${c.version || 1} â€¢ id: ${c.id.slice(0,8)}${learned}`;
+  renderKnowledgeInfo(null);
+}
+
+function renderKnowledgeInfo(info) {
+  const elK = el('ce-knowledge');
+  if (!elK) return;
+  if (!info) { elK.textContent = ''; return; }
+  const k = info.knowledge || info;
+  const lines = [];
+  if (k.confidence !== undefined) lines.push(`GÃ¼ven: ${Number(k.confidence||0).toFixed(2)} â€¢ AraÅŸtÄ±rma sayÄ±sÄ±: ${k.research_count||0}`);
+  if (k.hierarchy_levels) lines.push(`Bottom-up katman sayÄ±sÄ±: ${k.hierarchy_levels}`);
+  if (k.sources_count !== undefined) lines.push(`Kaynak sayÄ±sÄ±: ${k.sources_count}`);
+  if (k.last_researched_at) lines.push(`Son araÅŸtÄ±rma: ${k.last_researched_at}`);
+  if (info.research && info.research.always_researched) lines.push(`Ä°nternet araÅŸtÄ±rmasÄ±: her zaman yapÄ±ldÄ± (offline=${!!info.research.offline})`);
+  if (k.summary) lines.push('', 'Ã–zet:', String(k.summary).slice(0, 600));
+  const hier = info.hierarchy;
+  if (hier && Array.isArray(hier.layers)) {
+    lines.push('', 'Bottom-up katmanlar:');
+    hier.layers.forEach(l => {
+      const elems = (l.elements||[]).slice(0,4).map(e => (e && e.name) ? e.name : e).filter(Boolean).join(', ');
+      lines.push(`- L${l.level} ${l.name||''}: ${elems}`);
+    });
+  }
+  elK.textContent = lines.join('\n');
+
+async function loadClasses() {
+  try {
+    const data = await api('/api/entity-classes/');
+    state.classes = data.classes || [];
+    renderClassList();
+    if (state.selectedClassId) selectClass(state.selectedClassId);
+  } catch (e) {
+    classListEl.innerHTML = '<div class="muted">SÄ±nÄ±flar yÃ¼klenemedi.</div>';
+  }
+}
+
+async function createNewClass(withResearch=false) {
+  const name = prompt(withResearch ? 'AraÅŸtÄ±rÄ±lacak yeni sÄ±nÄ±f/varlÄ±k adÄ±:' : 'Yeni sÄ±nÄ±f adÄ±:', 'Yeni VarlÄ±k');
+  if (name === null) return;
+  setStatus(withResearch ? 'Ä°nternet araÅŸtÄ±rmasÄ± yapÄ±lÄ±yor ve sÄ±nÄ±f Ã¶ÄŸreniliyor (bottom-up)...' : 'SÄ±nÄ±f oluÅŸturuluyor...');
+  try {
+    let data;
+    if (withResearch) {
+      data = await api('/api/entity-classes/research/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+        body: JSON.stringify({ name: name || 'Yeni VarlÄ±k', category: 'other' })
+      });
+    } else {
+      data = await api('/api/entity-classes/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+        body: JSON.stringify({ name: name || 'Yeni VarlÄ±k', category: 'other' })
+      });
+    }
+    await loadClasses();
+    if (data.class?.id) selectClass(data.class.id);
+    if (data.knowledge || data.research) renderKnowledgeInfo(data);
+    loadLearnedKnowledgeSummary().catch(()=>{});
+    setStatus(withResearch ? 'SÄ±nÄ±f internetten araÅŸtÄ±rÄ±ldÄ± ve Ã¶ÄŸrenen modele kaydedildi.' : 'SÄ±nÄ±f oluÅŸturuldu.');
+  } catch (e) { alert('Hata: ' + e.message); setStatus('Hata: ' + e.message); }
+}
+
+async function researchSelectedClass() {
+  const id = state.selectedClassId; if (!id) return;
+  setStatus('Ä°nternet araÅŸtÄ±rmasÄ± yapÄ±lÄ±yor, bottom-up hiyerarÅŸi Ã¶ÄŸreniliyor...');
+  try {
+    const data = await api(`/api/entity-classes/${id}/research/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({})
+    });
+    await loadClasses();
+    if (data.class?.id) selectClass(data.class.id);
+    renderKnowledgeInfo(data);
+    loadLearnedKnowledgeSummary().catch(()=>{});
+    setStatus('SÄ±nÄ±f araÅŸtÄ±rÄ±ldÄ± ve Ã¶ÄŸrenen modele gÃ¼ncellendi.');
+  } catch (e) { alert('AraÅŸtÄ±rma hatasÄ±: ' + e.message); setStatus('AraÅŸtÄ±rma hatasÄ±: ' + e.message); }
+}
+
+async function saveSelectedClass() {
+  const id = state.selectedClassId; if (!id) return;
+  try {
+    const body = {
+      name: el('ce-name').value.trim(),
+      category: el('ce-category').value,
+      description: el('ce-desc').value,
+      parameters: parseJsonField(el('ce-params').value, {}),
+      components_template: parseJsonField(el('ce-components').value, {}),
+      skeleton_template: parseJsonField(el('ce-skeleton').value, {}),
+      render_template: parseJsonField(el('ce-render').value, {}),
+    };
+    await api(`/api/entity-classes/${id}/`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify(body)
+    });
+    await loadClasses();
+    selectClass(id);
+    setStatus('SÄ±nÄ±f kaydedildi.');
+  } catch (e) { alert('Kaydetme hatasÄ±: ' + e.message); }
+}
+
+async function deleteSelectedClass() {
+  const id = state.selectedClassId; if (!id) return;
+  if (!confirm('Bu sÄ±nÄ±f silinsin mi?')) return;
+  try {
+    await api(`/api/entity-classes/${id}/`, { method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') || '' } });
+    state.selectedClassId = null;
+    el('class-editor').style.display = 'none';
+    await loadClasses();
+    setStatus('SÄ±nÄ±f silindi.');
+  } catch (e) { alert('Silme hatasÄ±: ' + e.message); }
+}
+
+async function instantiateSelectedClass() {
+  const id = state.selectedClassId; if (!id) return;
+  if (!state.selectedId) { alert('Ã–nce bir sahne seÃ§in.'); return; }
+  const c = (state.classes || []).find(x => x.id === id);
+  let params = {};
+  try { params = parseJsonField(el('ce-params').value, {}); } catch(e) { alert(e.message); return; }
+  setStatus(`"${c?.name || 'SÄ±nÄ±f'}" Ã¼retiliyor ve sahneye yerleÅŸtiriliyor...`);
+  try {
+    await api(`/api/entity-classes/${id}/instantiate/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: JSON.stringify({ scene_id: state.selectedId, name: c?.name || 'Instance', parameters: params, place: true })
+    });
+    await selectScene(state.selectedId, true);
+    setStatus('3D Ã¶rnek Ã¼retildi ve sahneye yerleÅŸtirildi.');
+  } catch (e) { alert('Ãœretim hatasÄ±: ' + e.message); setStatus('Ãœretim hatasÄ±: ' + e.message); }
+}
+
+// compatibility alias used nowhere else now
+async function instantiateClass(classId, className) { state.selectedClassId = classId; await instantiateSelectedClass(); }
+
+async function selectScene(id, silent=false) {
+  stopTimelinePlayback();
+  state.tlPreviewActive = false;
+  state.selectedId = id;
+  renderSceneList();
+  const data = await api(`/api/scenes/${id}/`);
+  state.currentScene = data.scene;
+  if (state.selectedNodeId && !(state.currentScene.nodes||[]).find(n=>n.id===state.selectedNodeId)) state.selectedNodeId = null;
+  renderSceneMeta(state.currentScene);
+  await loadAssetsForScene(state.currentScene);
+  await loadTimeline();
+  renderTimelineUI();
+  if (!silent) setStatus(`Sahne seçildi: ${state.currentScene.name}`);
+}
+
+
+async function createScene() {
+  const name = prompt('Sahne adÄ±:', 'Yeni Sahne');
+  if (name === null) return;
+  const data = await api('/api/scenes/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+    body: JSON.stringify({ name: name || 'Yeni Sahne' })
+  });
+  await refreshScenes();
+  if (data.scene?.id) await selectScene(data.scene.id);
+}
+
+function getCookie(name) {
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
+}
+
+async function uploadAsset() {
+  if (!state.selectedId) { alert('Ã–nce bir sahne seÃ§in.'); return; }
+  const fileInput = el('asset-file');
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) { alert('Bir glTF/glb dosyasÄ± seÃ§in.'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  const name = el('asset-name').value.trim();
+  if (name) fd.append('name', name);
+  fd.append('auto_node', '1');
+  setStatus('YÃ¼kleniyor...');
+  try {
+    await api(`/api/scenes/${state.selectedId}/assets/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') || '' },
+      body: fd
+    });
+    fileInput.value = '';
+    el('asset-name').value = '';
+    await selectScene(state.selectedId, true);
+    setStatus('VarlÄ±k yÃ¼klendi ve sahneye eklendi.');
+  } catch (e) {
+    console.error(e);
+    setStatus('YÃ¼kleme hatasÄ±: ' + e.message);
+    alert('YÃ¼kleme hatasÄ±: ' + e.message);
+  }
+}
+
+// UI events
+el('btn-refresh').addEventListener('click', () => refreshScenes().catch(e => setStatus(e.message)));
+el('btn-new-scene').addEventListener('click', () => createScene().catch(e => setStatus(e.message)));
+el('btn-upload-asset').addEventListener('click', () => uploadAsset());
+el('btn-reset-camera').addEventListener('click', () => { camera.position.set(3,2,4); controls.target.set(0,1,0); controls.update(); });
+el('btn-frame').addEventListener('click', () => { if (currentRoot) frameObject(currentRoot); });
+el('btn-toggle-grid').addEventListener('click', () => { grid.visible = !grid.visible; });
+el('btn-new-class').addEventListener('click', () => createNewClass(false));
+el('btn-research-new-class').addEventListener('click', () => createNewClass(true));
+el('btn-reload-classes').addEventListener('click', () => loadClasses());
+el('btn-save-class').addEventListener('click', () => saveSelectedClass());
+el('btn-delete-class').addEventListener('click', () => deleteSelectedClass());
+el('btn-instantiate-class').addEventListener('click', () => instantiateSelectedClass());
+el('btn-research-class').addEventListener('click', () => researchSelectedClass());
+el('btn-save-node').addEventListener('click', () => saveSelectedNode());
+el('btn-delete-node').addEventListener('click', () => deleteSelectedNode());
+el('btn-dup-node').addEventListener('click', () => duplicateSelectedNode());
+el('btn-apply-action').addEventListener('click', () => applySelectedAction());
+el('btn-capture-keyframe').addEventListener('click', () => captureKeyframe());
+el('btn-load-timeline').addEventListener('click', () => loadTimeline());
+el('btn-save-timeline').addEventListener('click', () => saveTimeline());
+el('btn-tl-play').addEventListener('click', () => playTimeline());
+el('btn-tl-pause').addEventListener('click', () => stopTimelinePlayback());
+el('btn-tl-step').addEventListener('click', () => stepTimeline());
+el('btn-tl-preview').addEventListener('click', () => previewTimelineAt(el('tl-scrub')?.value || state.tlTime || 0, false));
+el('btn-tl-apply-save').addEventListener('click', () => previewTimelineAt(el('tl-scrub')?.value || state.tlTime || 0, true));
+const scrubEl = el('tl-scrub');
+if (scrubEl) {
+  let scrubTimer = null;
+  scrubEl.addEventListener('input', () => {
+    const t = Number(scrubEl.value || 0);
+    state.tlTime = t; renderTimelineUI();
+    if (scrubTimer) clearTimeout(scrubTimer);
+    scrubTimer = setTimeout(() => previewTimelineAt(t, false), 80);
+  });
+}
+el('btn-create-3d-job').addEventListener('click', () => create3DJob());
+el('btn-refresh-3d-jobs').addEventListener('click', () => load3DJobs());
+
+initViewer();
+refreshScenes().catch(e => { console.error(e); setStatus('Başlatma hatası: ' + e.message); });
+loadClasses().catch(e => console.error(e));
+loadProviders().catch(e => console.error(e));
+loadLearnedKnowledgeSummary().catch(e => console.error(e));
+load3DJobs().catch(e => console.error(e));
+
+
+// ===== Studio tabs + Video & Media section =====
+function initStudioTabs() {
+  const params = new URLSearchParams(window.location.search || '');
+  const requested = (params.get('tab') || params.get('section') || '').toLowerCase();
+  const tab3d = document.getElementById('studio-tab-3d');
+  const tabMedia = document.getElementById('studio-tab-media');
+  const btn3d = document.getElementById('tab-btn-3d');
+  const btnMedia = document.getElementById('tab-btn-media');
+  if (!tab3d || !tabMedia) return;
+  function activate(which) {
+    const isMedia = which === 'media';
+    tab3d.style.display = isMedia ? 'none' : '';
+    tabMedia.style.display = isMedia ? '' : 'none';
+    if (btn3d) btn3d.classList.toggle('active', !isMedia);
+    if (btnMedia) btnMedia.classList.toggle('active', isMedia);
+    if (isMedia) {
+      try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+      loadMediaJobsOnce();
+    } else {
+      try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+    }
+  }
+  if (btn3d) btn3d.addEventListener('click', () => activate('3d'));
+  if (btnMedia) btnMedia.addEventListener('click', () => activate('media'));
+  activate(requested === 'media' ? 'media' : '3d');
+}
+
+const mediaState = {
+  videoJobs: [],
+  imageJobs: [],
+  currentVideoJobId: null,
+  currentImageJobId: null,
+  videoPoll: null,
+  imagePoll: null,
+  loaded: false,
+};
+
+function mediaEl(id) { return document.getElementById(id); }
+function mediaCsrf() {
+  const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  const input = document.querySelector('#media-video-form input[name="csrfmiddlewaretoken"], #media-image-form input[name="csrfmiddlewaretoken"]');
+  return input ? input.value : '';
+}
+function mediaEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function mediaApi(path, options) {
+  options = options || {};
+  const method = options.method || 'GET';
+  const headers = Object.assign({'Accept':'application/json'}, options.headers || {});
+  let body = options.body;
+  if (method !== 'GET' && !(body instanceof FormData)) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    if (body && typeof body !== 'string' && headers['Content-Type'].includes('json')) body = JSON.stringify(body);
+  }
+  if (method !== 'GET') headers['X-CSRFToken'] = mediaCsrf();
+  const res = await fetch(path, { method, credentials: 'same-origin', headers, body });
+  let data = {};
+  try { data = await res.json(); } catch(e) { data = {}; }
+  if (!res.ok || data.ok === false) {
+    const err = new Error((data && (data.error || data.message)) || ('HTTP ' + res.status));
+    err.data = data; err.status = res.status; throw err;
+  }
+  return data;
+}
+
+function jobPayload(data) { return (data && (data.job || data.image || data.video || data.data)) || data || {}; }
+function jobsArray(data) {
+  if (!data) return [];
+  if (Array.isArray(data.jobs)) return data.jobs;
+  if (Array.isArray(data.images)) return data.images;
+  if (Array.isArray(data.videos)) return data.videos;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.results)) return data.results;
+  if (Array.isArray(data.data)) return data.data;
+  return [];
+}
+function isFinished(job) {
+  if (!job) return false;
+  if (job.is_finished === true) return true;
+  const st = String(job.status || '').toLowerCase();
+  return st === 'completed' || st === 'failed' || st === 'error' || st === 'cancelled';
+}
+function pillClass(status) {
+  const st = String(status || '').toLowerCase();
+  if (st === 'completed' || st === 'done' || st === 'succeeded') return 'ok';
+  if (st === 'failed' || st === 'error') return 'err';
+  return 'warn';
+}
+function setText(id, msg) { const e = mediaEl(id); if (e) e.textContent = msg; }
+function setBar(id, v) { const e = mediaEl(id); if (e) e.style.width = Math.max(0, Math.min(100, Number(v)||0)) + '%'; }
+
+function renderJobList(containerId, jobs, kind) {
+  const box = mediaEl(containerId);
+  if (!box) return;
+  if (!jobs || !jobs.length) { box.innerHTML = '<div class="media-empty">Henüz iş yok.</div>'; return; }
+  box.innerHTML = jobs.map(j => {
+    const id = j.id || j.job_id || '';
+    const title = (j.prompt || j.instruction || ('İş ' + String(id).slice(0,8))) || 'İş';
+    const st = j.status || 'pending';
+    const meta = [j.format, (j.width && j.height) ? (j.width + 'x' + j.height) : '', (j.duration ? (j.duration + 's') : '')].filter(Boolean).join(' • ');
+    const err = j.error ? ('<p style="color:#f87171;">' + mediaEscape(String(j.error).slice(0,120)) + '</p>') : '';
+    return '<div class="media-job" data-kind="'+kind+'" data-job-id="'+mediaEscape(id)+'">'
+      + '<div class="media-job-head"><strong>'+mediaEscape(String(title).slice(0,70))+'</strong><span class="media-pill '+pillClass(st)+'">'+mediaEscape(st)+'</span></div>'
+      + '<p>'+mediaEscape(meta || '')+'</p>' + err + '</div>';
+  }).join('');
+  box.querySelectorAll('.media-job').forEach(elm => {
+    elm.addEventListener('click', () => {
+      const id = elm.getAttribute('data-job-id');
+      const k = elm.getAttribute('data-kind');
+      if (!id) return;
+      if (k === 'video') selectVideoJob(id); else selectImageJob(id);
+    });
+  });
+}
+
+async function loadVideoJobs() {
+  try {
+    const data = await mediaApi('/api/video/');
+    const jobs = jobsArray(data);
+    mediaState.videoJobs = jobs;
+    renderJobList('media-video-jobs', jobs, 'video');
+  } catch (e) {
+    const box = mediaEl('media-video-jobs');
+    if (box) box.innerHTML = '<div class="media-empty">Video işleri yüklenemedi: ' + mediaEscape(e.message || e) + '</div>';
+  }
+}
+
+async function loadImageJobs() {
+  try {
+    const data = await mediaApi('/api/image/');
+    const jobs = jobsArray(data);
+    mediaState.imageJobs = jobs;
+    renderJobList('media-image-jobs', jobs, 'image');
+  } catch (e) {
+    const box = mediaEl('media-image-jobs');
+    if (box) box.innerHTML = '<div class="media-empty">Görsel işleri yüklenemedi: ' + mediaEscape(e.message || e) + '</div>';
+  }
+}
+
+function showVideoResult(job) {
+  if (!job) return;
+  const id = job.id || job.job_id || mediaState.currentVideoJobId;
+  const url = job.download_url || (id ? ('/api/video/' + encodeURIComponent(id) + '/download/') : null);
+  if (url) {
+    const v = mediaEl('media-video-preview');
+    if (v) { v.src = url; v.style.display = 'block'; try { v.load(); } catch(e) {} }
+    const dl = mediaEl('media-video-download'); const wrap = mediaEl('media-video-download-wrap');
+    if (dl) dl.href = url; if (wrap) wrap.style.display = 'block';
+  }
+  const editWrap = mediaEl('media-video-edit-wrap');
+  if (editWrap && id) editWrap.style.display = 'block';
+}
+
+function showImageResult(job) {
+  if (!job) return;
+  const id = job.id || job.job_id || mediaState.currentImageJobId;
+  const url = job.download_url || (id ? ('/api/image/' + encodeURIComponent(id) + '/download/') : null);
+  if (url) {
+    const img = mediaEl('media-image-preview');
+    if (img) { img.src = url; img.style.display = 'block'; }
+    const dl = mediaEl('media-image-download'); const wrap = mediaEl('media-image-download-wrap');
+    if (dl) dl.href = url; if (wrap) wrap.style.display = 'block';
+  }
+}
+
+async function pollVideoJob() {
+  if (!mediaState.currentVideoJobId) return;
+  if (mediaState.videoPoll) { clearTimeout(mediaState.videoPoll); mediaState.videoPoll = null; }
+  try {
+    const data = await mediaApi('/api/video/' + encodeURIComponent(mediaState.currentVideoJobId) + '/');
+    const job = jobPayload(data);
+    setBar('media-video-progress', job.progress || 0);
+    setText('media-video-status', (job.status || 'pending') + ' - %' + (job.progress || 0));
+    if (String(job.status).toLowerCase() === 'completed') showVideoResult(job);
+    if (String(job.status).toLowerCase() === 'failed') setText('media-video-status', 'Hata: ' + (job.error || 'Video üretimi başarısız.'));
+    if (!isFinished(job)) {
+      mediaState.videoPoll = setTimeout(pollVideoJob, 2000);
+    } else {
+      loadVideoJobs();
+    }
+  } catch (e) {
+    setText('media-video-status', 'Durum alınamadı: ' + (e.message || e));
+    mediaState.videoPoll = setTimeout(pollVideoJob, 4000);
+  }
+}
+
+async function pollImageJob() {
+  if (!mediaState.currentImageJobId) return;
+  if (mediaState.imagePoll) { clearTimeout(mediaState.imagePoll); mediaState.imagePoll = null; }
+  try {
+    const data = await mediaApi('/api/image/' + encodeURIComponent(mediaState.currentImageJobId) + '/');
+    const job = jobPayload(data);
+    setBar('media-image-progress', job.progress || 0);
+    setText('media-image-status', (job.status || 'pending') + ' - %' + (job.progress || 0));
+    if (String(job.status).toLowerCase() === 'completed') showImageResult(job);
+    if (String(job.status).toLowerCase() === 'failed') setText('media-image-status', 'Hata: ' + (job.error || 'Görsel üretimi başarısız.'));
+    if (!isFinished(job)) {
+      mediaState.imagePoll = setTimeout(pollImageJob, 2000);
+    } else {
+      loadImageJobs();
+    }
+  } catch (e) {
+    setText('media-image-status', 'Durum alınamadı: ' + (e.message || e));
+    mediaState.imagePoll = setTimeout(pollImageJob, 4000);
+  }
+}
+
+async function selectVideoJob(id) {
+  mediaState.currentVideoJobId = id;
+  try {
+    const data = await mediaApi('/api/video/' + encodeURIComponent(id) + '/');
+    const job = jobPayload(data);
+    setBar('media-video-progress', job.progress || 0);
+    setText('media-video-status', (job.status || '') + (job.error ? (' - ' + job.error) : ''));
+    showVideoResult(job);
+    if (!isFinished(job)) pollVideoJob();
+  } catch (e) { setText('media-video-status', 'Yüklenemedi: ' + (e.message || e)); }
+}
+
+async function selectImageJob(id) {
+  mediaState.currentImageJobId = id;
+  try {
+    const data = await mediaApi('/api/image/' + encodeURIComponent(id) + '/');
+    const job = jobPayload(data);
+    setBar('media-image-progress', job.progress || 0);
+    setText('media-image-status', (job.status || '') + (job.error ? (' - ' + job.error) : ''));
+    showImageResult(job);
+    if (!isFinished(job)) pollImageJob();
+  } catch (e) { setText('media-image-status', 'Yüklenemedi: ' + (e.message || e)); }
+}
+
+async function submitVideoGenerate(e) {
+  e.preventDefault();
+  const form = mediaEl('media-video-form'); if (!form) return;
+  const fd = new FormData(form);
+  const btn = mediaEl('media-video-submit'); if (btn) btn.disabled = true;
+  setText('media-video-status', 'Gönderiliyor...'); setBar('media-video-progress', 5);
+  try {
+    const data = await mediaApi('/api/video/generate/', { method: 'POST', body: fd });
+    const job = jobPayload(data);
+    mediaState.currentVideoJobId = job.id || job.job_id || null;
+    setText('media-video-status', 'İş oluşturuldu: ' + (job.status || 'pending'));
+    setBar('media-video-progress', job.progress || 10);
+    if (String(job.status).toLowerCase() === 'completed') showVideoResult(job);
+    if (mediaState.currentVideoJobId && !isFinished(job)) pollVideoJob();
+    loadVideoJobs();
+  } catch (err) {
+    const msg = (err && err.data && (err.data.error || err.data.message)) || (err && err.message) || String(err);
+    setText('media-video-status', 'Hata: ' + msg);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function submitVideoEdit(e) {
+  e.preventDefault();
+  if (!mediaState.currentVideoJobId) { setText('media-video-edit-status', 'Önce bir video seçin/üretin.'); return; }
+  const instruction = (mediaEl('media-video-edit-instruction').value || '').trim();
+  if (!instruction) { setText('media-video-edit-status', 'Talimat gerekli.'); return; }
+  const btn = mediaEl('media-video-edit-submit'); if (btn) btn.disabled = true;
+  setText('media-video-edit-status', 'Gönderiliyor...');
+  try {
+    const data = await mediaApi('/api/video/' + encodeURIComponent(mediaState.currentVideoJobId) + '/edit/', { method: 'POST', body: { instruction } });
+    const job = jobPayload(data);
+    setText('media-video-edit-status', 'Düzenleme: ' + (job.status || 'tamam'));
+    if (String(job.status).toLowerCase() === 'completed') showVideoResult(job); else pollVideoJob();
+    loadVideoJobs();
+  } catch (err) {
+    const msg = (err && err.data && (err.data.error || err.data.message)) || (err && err.message) || String(err);
+    setText('media-video-edit-status', 'Hata: ' + msg);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function submitImageGenerate(e) {
+  e.preventDefault();
+  const prompt = (mediaEl('media-image-prompt').value || '').trim();
+  const width = parseInt(mediaEl('media-image-width').value || '1024', 10) || 1024;
+  const height = parseInt(mediaEl('media-image-height').value || '1024', 10) || 1024;
+  const format = (mediaEl('media-image-format').value || 'png');
+  const provider = (mediaEl('media-image-provider').value || '').trim();
+  const btn = mediaEl('media-image-submit'); if (btn) btn.disabled = true;
+  setText('media-image-status', 'Gönderiliyor...'); setBar('media-image-progress', 5);
+  try {
+    const body = { prompt, width, height, format };
+    if (provider) body.provider = provider;
+    const data = await mediaApi('/api/image/generate/', { method: 'POST', body });
+    const job = jobPayload(data);
+    mediaState.currentImageJobId = job.id || job.job_id || null;
+    setText('media-image-status', 'İş oluşturuldu: ' + (job.status || 'pending'));
+    setBar('media-image-progress', job.progress || 10);
+    if (String(job.status).toLowerCase() === 'completed') showImageResult(job);
+    if (mediaState.currentImageJobId && !isFinished(job)) pollImageJob();
+    loadImageJobs();
+  } catch (err) {
+    const msg = (err && err.data && (err.data.error || err.data.message)) || (err && err.message) || String(err);
+    setText('media-image-status', 'Hata: ' + msg);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+let _mediaJobsLoadedOnce = false;
+function loadMediaJobsOnce() {
+  if (_mediaJobsLoadedOnce) return;
+  _mediaJobsLoadedOnce = true;
+  loadVideoJobs();
+  loadImageJobs();
+}
+
+function initMediaSection() {
+  const vForm = mediaEl('media-video-form'); if (vForm) vForm.addEventListener('submit', submitVideoGenerate);
+  const vEdit = mediaEl('media-video-edit-form'); if (vEdit) vEdit.addEventListener('submit', submitVideoEdit);
+  const iForm = mediaEl('media-image-form'); if (iForm) iForm.addEventListener('submit', submitImageGenerate);
+  const vr = mediaEl('media-video-reset'); if (vr) vr.addEventListener('click', () => { if (vForm) vForm.reset(); setText('media-video-status','Hazır.'); setBar('media-video-progress',0); });
+  const ir = mediaEl('media-image-reset'); if (ir) ir.addEventListener('click', () => { if (iForm) iForm.reset(); setText('media-image-status','Hazır.'); setBar('media-image-progress',0); });
+  const vref = mediaEl('media-video-refresh'); if (vref) vref.addEventListener('click', loadVideoJobs);
+  const iref = mediaEl('media-image-refresh'); if (iref) iref.addEventListener('click', loadImageJobs);
+}
+
+initStudioTabs();
+initMediaSection();
+
+</script>
+{% endblock %}
