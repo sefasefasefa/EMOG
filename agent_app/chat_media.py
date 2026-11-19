@@ -819,6 +819,8 @@ def _job_attachment(job_kind: str, job, poll_url: str = "", extra: dict | None =
         # may be relative media path; expose as-is, frontend can decide
         att["thumbnail"] = thumb
         att["thumbnail_path"] = thumb
+    if job_kind in ("video", "image"):
+        att["studio_url"] = "/studio/?tab=media"
     if extra:
         att.update(extra)
     return att

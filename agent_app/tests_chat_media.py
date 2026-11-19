@@ -38,6 +38,21 @@ class ImageJobModelTests(TestCase):
         self.assertFalse(job.is_finished)
 
 
+class JobAttachmentStudioUrlTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create(email="jobatt@example.com", username="jobatt-user")
+
+    def test_video_and_image_attachments_have_studio_url(self):
+        from agent_app.chat_media import _job_attachment
+        from agent_app.models import ImageJob, VideoJob
+        v = VideoJob.objects.create(user=self.user, prompt="p", status="pending")
+        att_v = _job_attachment("video", v, poll_url="/api/video/%s/" % v.id)
+        self.assertEqual(att_v.get("studio_url"), "/studio/?tab=media")
+        i = ImageJob.objects.create(user=self.user, prompt="p", status="pending")
+        att_i = _job_attachment("image", i, poll_url="/api/image/%s/" % i.id)
+        self.assertEqual(att_i.get("studio_url"), "/studio/?tab=media")
+
+
 class ChatAttachmentApiAndHistoryTests(TestCase):
     def setUp(self):
         self.user = User.objects.create(email="owner@example.com", username="owner-user")
