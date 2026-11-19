@@ -717,6 +717,8 @@ function renderSceneList() {
 }
 
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function isSafeMediaUrl(url){ if(url==null) return false; const s=String(url).trim(); if(!s) return false; if(s.startsWith('//')) return false; if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)){ try{ const u=new URL(s, window.location.origin); const p=u.protocol.toLowerCase(); return p==='http:'||p==='https:'||p==='blob:'; }catch(e){ return false; } } return true; }
+function sanitizeMediaUrl(url){ return isSafeMediaUrl(url)?String(url).trim():''; }
 
 state.selectedNodeId = null;
 
@@ -979,7 +981,8 @@ async function load3DJobs() {
     state.jobs = data.jobs || [];
     if (!state.jobs.length) { box.innerHTML = '<div class="muted">Job yok.</div>'; return; }
     box.innerHTML = state.jobs.slice(0,20).map(j => {
-      const out = j.output_asset_url ? `<a href="${escapeHtml(j.output_asset_url)}" target="_blank">çıktı</a>` : '';
+      const outUrl = sanitizeMediaUrl(j.output_asset_url || '');
+      const out = outUrl ? `<a href="${escapeHtml(outUrl)}" target="_blank" rel="noopener">çıktı</a>` : '';
       return `<div style="margin-bottom:4px;">• <strong>${escapeHtml((j.provider||'')+'/'+(j.mode||''))}</strong> <span class="muted">${escapeHtml(j.status||'')} %${j.progress||0} ${j.error?('• '+escapeHtml(j.error).slice(0,80)):''}</span> ${out}</div>`;
     }).join('');
   } catch(e) {
@@ -1378,6 +1381,8 @@ function mediaCsrf() {
   return input ? input.value : '';
 }
 function mediaEscape(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function mediaIsSafeUrl(url){ if(url==null) return false; const s=String(url).trim(); if(!s) return false; if(s.startsWith('//')) return false; if(/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)){ try{ const u=new URL(s, window.location.origin); const p=u.protocol.toLowerCase(); return p==='http:'||p==='https:'||p==='blob:'; }catch(e){ return false; } } return true; }
+function mediaSanitizeUrl(url){ return mediaIsSafeUrl(url)?String(url).trim():''; }
 
 async function mediaApi(path, options) {
   options = options || {};
@@ -1476,7 +1481,7 @@ async function loadImageJobs() {
 function showVideoResult(job) {
   if (!job) return;
   const id = job.id || job.job_id || mediaState.currentVideoJobId;
-  const url = job.download_url || (id ? ('/api/video/' + encodeURIComponent(id) + '/download/') : null);
+  const url = mediaSanitizeUrl(job.download_url || (id ? ('/api/video/' + encodeURIComponent(id) + '/download/') : ''));
   if (url) {
     const v = mediaEl('media-video-preview');
     if (v) { v.src = url; v.style.display = 'block'; try { v.load(); } catch(e) {} }
@@ -1490,7 +1495,7 @@ function showVideoResult(job) {
 function showImageResult(job) {
   if (!job) return;
   const id = job.id || job.job_id || mediaState.currentImageJobId;
-  const url = job.download_url || (id ? ('/api/image/' + encodeURIComponent(id) + '/download/') : null);
+  const url = mediaSanitizeUrl(job.download_url || (id ? ('/api/image/' + encodeURIComponent(id) + '/download/') : ''));
   if (url) {
     const img = mediaEl('media-image-preview');
     if (img) { img.src = url; img.style.display = 'block'; }

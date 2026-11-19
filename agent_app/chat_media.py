@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
+from urllib.parse import quote
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -67,6 +68,18 @@ def _content_type_for(name: str, mime_type: str = "") -> str:
         return mime_type
     guessed, _ = mimetypes.guess_type(name or "")
     return guessed or "application/octet-stream"
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    name = Path(filename or "download").name.replace("\r", "").replace("\n", "")
+    if not name:
+        name = "download"
+    ascii_fallback = name.encode("ascii", "ignore").decode("ascii")
+    ascii_fallback = ascii_fallback.replace("\\", "_").replace('"', "'").strip(" .") or "download"
+    utf8_name = quote(name, safe="!#$&+-.^_`|~ ")
+    if not utf8_name:
+        utf8_name = "download"
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{utf8_name}"
 
 
 def attachment_to_dict(att: ChatAttachment) -> dict:
@@ -231,7 +244,7 @@ def chat_attachment_download(request, att_id):
     except OSError:
         return JsonResponse({"ok": False, "error": "Cannot open file", "code": "io_error"}, status=500)
     resp = FileResponse(fh, content_type=ctype)
-    resp["Content-Disposition"] = f'attachment; filename="{Path(att.name).name}"'
+    resp["Content-Disposition"] = _content_disposition_attachment(att.name)
     return resp
 
 

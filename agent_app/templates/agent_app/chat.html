@@ -1277,6 +1277,24 @@
   const $ = (id) => document.getElementById(id);
   function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
   function escapeAttr(text) { return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function isSafeMediaUrl(url) {
+    if (url == null) return false;
+    const s = String(url).trim();
+    if (!s) return false;
+    if (s.startsWith('//')) return false;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) {
+      try {
+        const u = new URL(s, window.location.origin);
+        const p = u.protocol.toLowerCase();
+        return p === 'http:' || p === 'https:' || p === 'blob:';
+      } catch (e) { return false; }
+    }
+    return true; // relative/path/query/hash
+  }
+  function sanitizeMediaUrl(url) {
+    if (!isSafeMediaUrl(url)) return '';
+    return String(url).trim();
+  }
 
   // ===== CSRF Token =====
   function getCSRFToken() {
@@ -1367,7 +1385,12 @@
       .replace(/^---$/gm, '<hr>')
       .replace(/^\s*[-*+]\s+(.+)$/gm, '<li>$1</li>')
       .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+        const rawUrl = String(url || '').replace(/&amp;/g, '&').trim();
+        const safe = sanitizeMediaUrl(rawUrl);
+        if (!safe) return label;
+        return '<a href="' + escapeAttr(safe) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+      })
       .split('\n')
       .map(line => {
         if (!line.trim()) return '<p></p>';
@@ -1441,8 +1464,8 @@
 
   function attachmentStudioHref(att) {
     if (!att || typeof att !== 'object') return '';
-    if (att.studio_url) return String(att.studio_url);
-    if (att.scene_url) return String(att.scene_url);
+    if (att.studio_url) return sanitizeMediaUrl(String(att.studio_url));
+    if (att.scene_url) return sanitizeMediaUrl(String(att.scene_url));
     if (att.scene_id) return '/studio/?scene=' + encodeURIComponent(String(att.scene_id));
     return '';
   }
@@ -1454,19 +1477,19 @@
       const name = String(att.name || att.filename || 'dosya');
       const sizeText = formatBytes(att.size);
       const kind = inferAttachmentKind(att);
-      const href = attachmentHref(att);
-      const safeHref = href ? escapeAttr(href) : '';
+      const href = sanitizeMediaUrl(attachmentHref(att));
+      const safeHrefAttr = href ? escapeAttr(href) : '';
       const safeName = escapeHtml(name);
-      const studioHref = attachmentStudioHref(att);
+      const studioHref = sanitizeMediaUrl(attachmentStudioHref(att));
       const studioLink = studioHref
-        ? `<a class="file-action" href="${escapeAttr(studioHref)}" target="_blank" rel="noopener">Studio</a>`
+        ? `<a class=file-action href=${escapeAttr(studioHref)} target=_blank rel=noopener>Studio</a>`
         : '';
 
-      if (kind === 'image' && safeHref) {
-        return `<a class="bubble-attachment-image-link" href="${safeHref}" target="_blank" rel="noopener"><img class="bubble-attachment-image" src="${safeHref}" alt="${escapeAttr(name)}" loading="lazy"></a>`;
+      if (kind === 'image' && safeHrefAttr) {
+        return `<a class=bubble-attachment-image-link href=${safeHrefAttr} target=_blank rel=noopener><img class=bubble-attachment-image src=${safeHrefAttr} alt=${escapeAttr(name)} loading=lazy></a>`;
       }
-      if (kind === 'video' && safeHref) {
-        return `<div><video class="bubble-attachment-video" controls preload="metadata" src="${safeHref}"></video><div style="margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><span style="font-size:12px;color:var(--fg-muted);">${safeName}${sizeText ? ' · ' + escapeHtml(sizeText) : ''}</span><a class="file-action" href="${safeHref}" target="_blank" rel="noopener">İndir</a>${studioLink}</div></div>`;
+      if (kind === 'video' && safeHrefAttr) {
+        return `<div><video class=bubble-attachment-video controls preload=metadata src=${safeHrefAttr}></video><div style=margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;><span style=font-size:12px;color:var(--fg-muted);>${safeName}${sizeText ? ' · ' + escapeHtml(sizeText) : ''}</span><a class=file-action href=${safeHrefAttr} target=_blank rel=noopener>İndir</a>${studioLink}</div></div>`;
       }
 
       const icon = kind === '3d_model' ? '🧊' : (kind === 'audio' ? '🎵' : '📄');
@@ -1474,14 +1497,13 @@
       if (sizeText) subParts.push(sizeText);
       if (att.mime) subParts.push(String(att.mime));
       const sub = escapeHtml(subParts.join(' · '));
-      const tag = safeHref ? 'a' : 'div';
-      const hrefAttr = safeHref ? ` href="${safeHref}" target="_blank" rel="noopener" download` : '';
-      const action = safeHref ? `<span class="file-action">İndir</span>` : '';
-      return `<${tag} class="bubble-attachment-card"${hrefAttr}><span class="file-icon">${icon}</span><span class="file-meta"><span class="file-name">${safeName}</span><span class="file-sub">${sub}</span></span>${action}${studioLink ? `<span style="margin-left:4px;">${studioLink}</span>` : ''}</${tag}>`;
+      const tag = safeHrefAttr ? 'a' : 'div';
+      const hrefAttr = safeHrefAttr ? ` href=${safeHrefAttr} target=_blank rel=noopener download` : '';
+      const action = safeHrefAttr ? `<span class=file-action>İndir</span>` : '';
+      return `<${tag} class=bubble-attachment-card${hrefAttr}><span class=file-icon>${icon}</span><span class=file-meta><span class=file-name>${safeName}</span><span class=file-sub>${sub}</span></span>${action}${studioLink ? `<span style=margin-left:4px;>${studioLink}</span>` : ''}</${tag}>`;
     }).filter(Boolean).join('');
-    return items ? `<div class="bubble-attachments">${items}</div>` : '';
+    return items ? `<div class=bubble-attachments>${items}</div>` : '';
   }
-
   function renderBubble(text, who, isError = false, extraClass = '', attachments = []) {
     if (emptyChat) emptyChat.style.display = 'none';
     bubbleCounter++;
@@ -2209,7 +2231,10 @@
       chip.dataset.attachId = String(item.id);
       let thumbHtml = `<span class="chip-icon">${kind === 'image' ? '🖼️' : kind === 'video' ? '🎬' : kind === '3d_model' ? '🧊' : '📄'}</span>`;
       if (kind === 'image' && item.previewUrl) {
-        thumbHtml = `<img class="chip-thumb" src="${escapeAttr(item.previewUrl)}" alt="${escapeAttr(file.name)}">`;
+        const safePreview = sanitizeMediaUrl(item.previewUrl);
+        if (safePreview) {
+          thumbHtml = `<img class="chip-thumb" src="${escapeAttr(safePreview)}" alt="${escapeAttr(file.name)}">`;
+        }
       }
       chip.innerHTML = `
         ${thumbHtml}

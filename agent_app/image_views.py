@@ -14,6 +14,7 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from django.http import FileResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -87,6 +88,18 @@ def _safe_relative_path(p):
         return str(rel)
     except (OSError, ValueError):
         return None
+
+
+def _content_disposition_attachment(filename: str) -> str:
+    name = Path(filename or "download").name.replace("\r", "").replace("\n", "")
+    if not name:
+        name = "download"
+    ascii_fallback = name.encode("ascii", "ignore").decode("ascii")
+    ascii_fallback = ascii_fallback.replace("\\", "_").replace('"', "'").strip(" .") or "download"
+    utf8_name = quote(name, safe="!#$&+-.^_`|~ ")
+    if not utf8_name:
+        utf8_name = "download"
+    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{utf8_name}"
 
 
 def _serialize_job(job):
@@ -390,5 +403,5 @@ def image_download(request, job_id):
         return _json({"ok": False, "error": "Cannot open file", "code": "io_error"}, status=500)
 
     response = FileResponse(fh, content_type=content_type)
-    response["Content-Disposition"] = f'attachment; filename="{path.name}"'
+    response["Content-Disposition"] = _content_disposition_attachment(path.name)
     return response
