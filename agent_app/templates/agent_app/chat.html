@@ -956,7 +956,7 @@
       <div class="chat-input-area">
         <div id="chat-attachments-preview" class="chat-attachments-preview" aria-live="polite"></div>
         <form id="chat-form" class="input-row">
-          <input type="file" id="chat-attach-input" multiple hidden>
+          <input type="file" id="chat-attach-input" multiple accept="image/*,video/*,audio/*,.txt,.md,.csv,.json,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.glb,.gltf,.obj,.fbx,.stl,.zip" hidden>
           <div class="input-actions">
             <button type="button" id="chat-attach-btn" class="btn btn-ghost chat-attach-btn" aria-label="Dosya ekle" title="Dosya ekle">📎</button>
           </div>
@@ -1486,7 +1486,7 @@
         : '';
 
       if (kind === 'image' && safeHrefAttr) {
-        return `<a class=bubble-attachment-image-link href=${safeHrefAttr} target=_blank rel=noopener><img class=bubble-attachment-image src=${safeHrefAttr} alt=${escapeAttr(name)} loading=lazy></a>`;
+        return `<a class=bubble-attachment-image-link href=${safeHrefAttr} target=_blank rel=noopener><img class=bubble-attachment-image src=${safeHrefAttr} alt=${escapeAttr(name)} loading=lazy></a>${studioLink}`;
       }
       if (kind === 'video' && safeHrefAttr) {
         return `<div><video class=bubble-attachment-video controls preload=metadata src=${safeHrefAttr}></video><div style=margin-top:4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;><span style=font-size:12px;color:var(--fg-muted);>${safeName}${sizeText ? ' · ' + escapeHtml(sizeText) : ''}</span><a class=file-action href=${safeHrefAttr} target=_blank rel=noopener>İndir</a>${studioLink}</div></div>`;
