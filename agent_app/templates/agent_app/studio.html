@@ -1355,8 +1355,10 @@ function initStudioTabs() {
     if (isMedia) {
       try { window.dispatchEvent(new Event('resize')); } catch(e) {}
       loadMediaJobsOnce();
+      startMediaJobsPollLoop();
     } else {
       try { window.dispatchEvent(new Event('resize')); } catch(e) {}
+      stopMediaJobsPollLoop();
     }
   }
   if (btn3d) btn3d.addEventListener('click', () => activate('3d'));
@@ -1371,6 +1373,7 @@ const mediaState = {
   currentImageJobId: null,
   videoPoll: null,
   imagePoll: null,
+  mediaPollTimer: null,
   loaded: false,
 };
 
@@ -1649,6 +1652,15 @@ function loadMediaJobsOnce() {
   _mediaJobsLoadedOnce = true;
   loadVideoJobs();
   loadImageJobs();
+}
+
+function startMediaJobsPollLoop() {
+  if (mediaState.mediaPollTimer) { clearInterval(mediaState.mediaPollTimer); mediaState.mediaPollTimer = null; }
+  mediaState.mediaPollTimer = setInterval(() => { loadVideoJobs(); loadImageJobs(); }, 4000);
+}
+
+function stopMediaJobsPollLoop() {
+  if (mediaState.mediaPollTimer) { clearInterval(mediaState.mediaPollTimer); mediaState.mediaPollTimer = null; }
 }
 
 function initMediaSection() {
