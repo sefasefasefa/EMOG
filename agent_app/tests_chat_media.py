@@ -288,167 +288,94 @@ class ChatAttachmentApiAndHistoryTests(TestCase):
                 conv.refresh_from_db()
                 self.assertIsNone((conv.meta_data or {}).get("pending_action"))
                 self.assertEqual(mock_llm.call_count, 0)
-    def setUp(self):
-        self.user = User.objects.create(email="owner@example.com", username="owner-user")
-        self.other = User.objects.create(email="other@example.com", username="other-user")
-        self.client.defaults["HTTP_HOST"] = "testserver"
-
-    def _auth(self, user=None):
-        from agent_app import tokens
-
-        self.client.cookies["emog_at"] = tokens.create_access_token(user or self.user)
-
-    def _create_attachment(self, user, conversation, name="a.txt", content=b"hello", mime="text/plain", kind="file"):
-        up = SimpleUploadedFile(name, content, content_type=mime)
-        return ChatAttachment.objects.create(
-            user=user,
-            conversation=conversation,
-            node=None,
-            kind=kind,
-            name=name,
-            mime_type=mime,
-            size=len(content),
-            file=up,
-        )
-
-    def test_history_includes_attachments_field(self):
-        with tempfile.TemporaryDirectory() as d:
-            with override_settings(MEDIA_ROOT=d):
-                self._auth(self.user)
-                resp0 = self.client.get("/chat/history/")
-                self.assertEqual(resp0.status_code, 200)
-                conv_id = resp0.json().get("conversation_id")
-                conv = Conversation.objects.get(id=conv_id)
-                session = self.client.session
-                session["chat_conversation_id"] = str(conv.id)
-                session.save()
-                node = Node.objects.create(
-                    conversation=conv,
-                    parent=None,
-                    role="user",
-                    content="hello",
-                    meta_data={"attachments": [{"id": "att1", "name": "pic.png", "type": "image"}]},
-                )
-
-                resp = self.client.get("/chat/history/")
-                self.assertEqual(resp.status_code, 200)
-                data = resp.json()
-                self.assertTrue(data.get("ok"))
-                self.assertEqual(str(data.get("conversation_id")), str(conv.id), data)
-                msgs = [m for m in data.get("messages", []) if m.get("content") == "hello"]
-                self.assertTrue(msgs, data)
-                self.assertEqual(msgs[0].get("attachments"), node.meta_data["attachments"])
-
-    def test_history_defaults_empty_attachments(self):
-        with tempfile.TemporaryDirectory() as d:
-            with override_settings(MEDIA_ROOT=d):
-                self._auth(self.user)
-                resp0 = self.client.get("/chat/history/")
-                self.assertEqual(resp0.status_code, 200)
-                conv_id = resp0.json().get("conversation_id")
-                conv = Conversation.objects.get(id=conv_id)
-                session = self.client.session
-                session["chat_conversation_id"] = str(conv.id)
-                session.save()
-                Node.objects.create(conversation=conv, role="user", content="plain")
-
-                resp = self.client.get("/chat/history/")
-                self.assertEqual(resp.status_code, 200)
-                data = resp.json()
-                self.assertEqual(str(data.get("conversation_id")), str(conv.id), data)
-                msg = [m for m in data.get("messages", []) if m.get("content") == "plain"][0]
-                self.assertEqual(msg.get("attachments"), [])
-
-    def test_download_forbidden_for_other_user(self):
-        with tempfile.TemporaryDirectory() as d:
-            with override_settings(MEDIA_ROOT=d):
-                conv = Conversation.objects.create(app_user=self.user, title="t")
-                att = self._create_attachment(self.user, conv)
-                self._auth(self.other)
-
-                resp = self.client.get(f"/api/chat/attachments/{att.id}/download/")
-                self.assertIn(resp.status_code, (403, 404))
-
-    def test_download_allowed_for_owner(self):
-        with tempfile.TemporaryDirectory() as d:
-            with override_settings(MEDIA_ROOT=d):
-                conv = Conversation.objects.create(app_user=self.user, title="t")
-                att = self._create_attachment(self.user, conv, name="note.txt", content=b"abc123", mime="text/plain")
-                self._auth(self.user)
-
-                resp = self.client.get(f"/api/chat/attachments/{att.id}/download/")
-                self.assertEqual(resp.status_code, 200)
-                self.assertEqual(b"".join(resp.streaming_content), b"abc123")
-                self.assertIn("text/plain", resp.get("Content-Type", ""))
-                self.assertIn("note.txt", resp.get("Content-Disposition", ""))
-
-    def test_chat_media_helpers_save_and_serialize(self):
-        with tempfile.TemporaryDirectory() as d:
-            with override_settings(MEDIA_ROOT=d):
-                from django.test import RequestFactory
-                from agent_app import chat_media
-
-                conv = Conversation.objects.create(app_user=self.user, title="t")
-                rf = RequestFactory()
-                up = SimpleUploadedFile("pic.png", b"\x89PNG\r\n\x1a\nfake", content_type="image/png")
-                req = rf.post("/assistant/message/", {"message": "hi"})
-                req.FILES.setlist("attachments", [up])
-                req.user_app = self.user
-
-                saved = chat_media.save_chat_attachments(req, self.user, conv, node=None)
-                self.assertEqual(len(saved), 1)
-                self.assertTrue(saved[0]["id"])
-                self.assertEqual(saved[0]["name"], "pic.png")
-                self.assertEqual(saved[0]["type"], "image")
-                self.assertEqual(saved[0]["kind"], "image")
-                self.assertTrue(saved[0]["url"].endswith("/download/"))
-
-                node = Node.objects.create(conversation=conv, role="user", content="x", meta_data={"attachments": saved})
-                serialized = chat_media.serialize_attachments_for_node(node)
-                self.assertEqual(serialized[0]["id"], saved[0]["id"])
-                self.assertEqual(chat_media.serialize_attachments_for_node({"attachments": saved}), saved)
-
-    def test_assistant_message_persists_attachments(self):
+    def test_instantiate_entity_class_without_scene_creates_pending_question(self):
         with tempfile.TemporaryDirectory() as d:
             with override_settings(MEDIA_ROOT=d):
                 from unittest.mock import patch
+                from agent_app.models import EntityClass, EntityInstance, SceneNode
 
-                self._auth(self.user)
-                # Establish conversation in session
-                resp0 = self.client.get("/chat/history/")
-                self.assertEqual(resp0.status_code, 200)
-                conv_id = resp0.json().get("conversation_id")
-                conv = Conversation.objects.get(id=conv_id)
-                session = self.client.session
-                session["chat_conversation_id"] = str(conv.id)
-                session.save()
+                conv = self._establish_conversation(self.user)
+                scene = Scene.objects.create(user=self.user, name="Hedef Sahne")
+                ec = EntityClass.objects.create(
+                    user=self.user,
+                    name="TestBot",
+                    category="other",
+                    description="test",
+                    components_template={},
+                    skeleton_template={},
+                    render_template={},
+                    parameters={},
+                )
 
-                class _Msg:
-                    content = json.dumps({"intent": "chat", "message": "ok", "task": "", "model": "", "priority": "medium"})
-
-                class _Choice:
-                    message = _Msg()
-
-                class _Resp:
-                    choices = [_Choice()]
-
-                up = SimpleUploadedFile("doc.txt", b"data", content_type="text/plain")
                 with patch("agent_app.views.provider_reachable", return_value=(True, "")), \
-                     patch("agent_app.views.llm_create_resilient", return_value=_Resp()):
-                    resp = self.client.post(
-                        "/assistant/message/",
-                        {"message": "merhaba", "attachments": [up]},
-                    )
+                     patch("agent_app.views.llm_create_resilient") as mock_llm:
+                    resp = self.client.post("/assistant/message/", {"message": "TestBot sınıfını sahneye ekle"})
 
                 self.assertEqual(resp.status_code, 200, resp.content)
                 data = resp.json()
                 self.assertTrue(data.get("ok"), data)
-                self.assertTrue(data.get("attachments"), data)
-                self.assertEqual(str(data.get("conversation_id") or ""), str(conv.id), data)
+                self.assertTrue(data.get("needs_user_choice"), data)
+                reply = (data.get("reply") or "").lower()
+                self.assertTrue(any(x in reply for x in ("sahne", "yerleştir", "yerlestir", "sahnesiz", "seç", "sec")), data)
+                self.assertEqual(EntityInstance.objects.filter(entity_class=ec, user=self.user).count(), 0)
+                self.assertEqual(SceneNode.objects.filter(scene=scene).count(), 0)
+                conv.refresh_from_db()
+                pending = (conv.meta_data or {}).get("pending_action")
+                self.assertIsInstance(pending, dict, conv.meta_data)
+                self.assertEqual(pending.get("type"), "instantiate_entity_class")
+                params = pending.get("params") or {}
+                self.assertEqual(str(params.get("class_id")), str(ec.id))
+                self.assertEqual(mock_llm.call_count, 0)
 
-                user_node = Node.objects.filter(conversation=conv, role="user").order_by("-timestamp").first()
-                self.assertIsNotNone(user_node)
-                atts = (user_node.meta_data or {}).get("attachments") or []
-                self.assertEqual(len(atts), 1)
-                self.assertEqual(atts[0].get("name"), "doc.txt")
-                self.assertTrue(atts[0].get("url"))
+                # Resolve by explicit user choice -> instantiate in chosen scene
+                with patch("agent_app.views.provider_reachable", return_value=(True, "")), \
+                     patch("agent_app.views.llm_create_resilient") as mock_llm2:
+                    resp2 = self.client.post("/assistant/message/", {"message": "1"})
+                self.assertEqual(resp2.status_code, 200, resp2.content)
+                data2 = resp2.json()
+                self.assertTrue(data2.get("ok"), data2)
+                self.assertEqual(EntityInstance.objects.filter(entity_class=ec, user=self.user, scene=scene).count(), 1)
+                self.assertGreaterEqual(SceneNode.objects.filter(scene=scene).count(), 1)
+                conv.refresh_from_db()
+                self.assertIsNone((conv.meta_data or {}).get("pending_action"))
+                self.assertEqual(mock_llm2.call_count, 0)
+
+    def test_video_edit_disambiguation_prefers_conversation_media(self):
+        with tempfile.TemporaryDirectory() as d:
+            with override_settings(MEDIA_ROOT=d):
+                from unittest.mock import patch
+                from agent_app.models import VideoJob
+
+                conv = self._establish_conversation(self.user)
+                v1 = VideoJob.objects.create(user=self.user, prompt="konusma video 1", status="completed")
+                v2 = VideoJob.objects.create(user=self.user, prompt="konusma video 2", status="completed")
+                v_other = VideoJob.objects.create(user=self.user, prompt="kullanici kutuphane video", status="completed")
+                # Two conversation video results in this chat flow
+                Node.objects.create(
+                    conversation=conv, role="assistant", content="v1 hazir",
+                    meta_data={"attachments": [{"type": "video", "job_kind": "video", "job_id": str(v1.id), "name": "conv-v1", "status": "completed", "url": f"/api/video/{v1.id}/download/"}]},
+                )
+                Node.objects.create(
+                    conversation=conv, role="assistant", content="v2 hazir",
+                    meta_data={"attachments": [{"type": "video", "job_kind": "video", "job_id": str(v2.id), "name": "conv-v2", "status": "completed", "url": f"/api/video/{v2.id}/download/"}]},
+                )
+
+                with patch("agent_app.views.provider_reachable", return_value=(True, "")), \
+                     patch("agent_app.views.llm_create_resilient") as mock_llm:
+                    resp = self.client.post("/assistant/message/", {"message": "bu videoyu gif yap"})
+
+                self.assertEqual(resp.status_code, 200, resp.content)
+                data = resp.json()
+                self.assertTrue(data.get("ok"), data)
+                self.assertTrue(data.get("needs_user_choice"), data)
+                conv.refresh_from_db()
+                pending = (conv.meta_data or {}).get("pending_action")
+                self.assertIsInstance(pending, dict, conv.meta_data)
+                self.assertEqual(pending.get("type"), "edit_video")
+                options = pending.get("options") or []
+                option_job_ids = {str(o.get("job_id")) for o in options}
+                # Must prefer conversation media/results in this chat flow
+                self.assertIn(str(v1.id), option_job_ids)
+                self.assertIn(str(v2.id), option_job_ids)
+                self.assertNotIn(str(v_other.id), option_job_ids)
+                self.assertEqual(mock_llm.call_count, 0)

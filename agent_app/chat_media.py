@@ -600,55 +600,6 @@ def execute_place_3d_upload(pending: dict, selected: dict, user):
     }
 
 
-def try_handle_pending_action(conversation, user, reply_text):
-    """If conversation has pending_action, try to resolve and execute it. Returns response dict or None."""
-    meta = dict(conversation.meta_data or {})
-    pending = meta.get("pending_action")
-    if not isinstance(pending, dict) or not pending:
-        return None
-    selected, info = resolve_pending_action_reply(pending, reply_text, user)
-    if selected is None:
-        # re-ask without guessing
-        question = format_pending_question(pending, user)
-        return {
-            "handled": True,
-            "ok": True,
-            "intent": "chat",
-            "reply": "Seçiminizi netleştiremedim. Lütfen aşağıdaki seçeneklerden birini belirtin.\n\n" + question,
-            "conversation_id": str(conversation.id),
-            "pending_action": pending,
-            "needs_user_choice": True,
-        }
-
-    ptype = pending.get("type")
-    exec_result = None
-    if ptype == "place_3d_upload":
-        exec_result = execute_place_3d_upload(pending, selected, user)
-    else:
-        exec_result = {"ok": False, "error": "Bu bekleyen işlem türü desteklenmiyor.", "code": "unsupported_pending"}
-
-    # clear pending only if executed (success or definitive failure we shouldn't loop on?) 
-    # on success clear; on definitive invalid selection maybe keep? we matched selection so clear and report.
-    meta.pop("pending_action", None)
-    conversation.meta_data = meta
-    try:
-        conversation.save()
-    except Exception:
-        pass
-
-    reply = exec_result.get("message") or (exec_result.get("error") if not exec_result.get("ok") else "İşlem tamamlandı.")
-    return {
-        "handled": True,
-        "ok": bool(exec_result.get("ok", False)) or "message" in exec_result,
-        "intent": "chat",
-        "reply": reply,
-        "conversation_id": str(conversation.id),
-        "result": exec_result,
-        "attachments": exec_result.get("attachments") or exec_result.get("media") or [],
-        "pending_action": None,
-    }
-
-
 def maybe_create_3d_upload_pending_action(conversation, user, saved_attachments, user_message=""):
     """Detect ambiguous 3D upload and create pending action. Returns response dict or None."""
     atts = [a for a in (saved_attachments or []) if is_3d_attachment(a)]
@@ -1077,8 +1028,788 @@ def execute_generate_3d(pending: dict, selected: dict, user):
     }
 
 
-# Extend try_handle_pending_action to support generate_3d
-_orig_try_handle_pending_action = try_handle_pending_action
+
+# ---------------------------------------------------------------------------
+# EntityClass instantiate via chat (spec 8.5c)
+# ---------------------------------------------------------------------------
+
+_INSTANTIATE_KEYWORDS = ("instantiate", "ornekle", "örnekle", "instance", "sınıfını", "sinifini", "entity class")
+
+
+def _user_accessible_entity_classes(user):
+    if user is None:
+        return EntityClass.objects.none()
+    try:
+        from django.db.models import Q
+        return EntityClass.objects.filter(Q(user=user) | Q(user__isnull=True)).distinct()
+    except Exception:
+        try:
+            return EntityClass.objects.filter(user=user)
+        except Exception:
+            return EntityClass.objects.none()
+
+
+def _resolve_entity_class_from_message(message: str, user):
+    """Return (resolved_class_or_None, candidates_list). No guessing when ambiguous."""
+    msg = (message or "").strip()
+    norm = _norm_text(msg)
+    if not norm:
+        return None, []
+    qs = _user_accessible_entity_classes(user)
+    try:
+        classes = list(qs)
+    except Exception:
+        classes = []
+    if not classes:
+        return None, []
+
+    # Prefer explicit id/uuid mention? unlikely in chat, skip.
+
+    exact = []
+    partial = []
+    for ec in classes:
+        name = _norm_text(getattr(ec, "name", ""))
+        slug = _norm_text(getattr(ec, "slug", ""))
+        if not name and not slug:
+            continue
+        if name and (norm == name or re.search(rf"(?<!\w){re.escape(name)}(?!\w)", norm)):
+            exact.append(ec)
+            continue
+        if slug and (norm == slug or re.search(rf"(?<!\w){re.escape(slug)}(?!\w)", norm)):
+            exact.append(ec)
+            continue
+        # partial: class name appears inside message (min length to avoid noise)
+        if name and len(name) >= 3 and name in norm:
+            partial.append(ec)
+        elif slug and len(slug) >= 3 and slug in norm:
+            partial.append(ec)
+
+    if len(exact) == 1:
+        return exact[0], [exact[0]]
+    if len(exact) > 1:
+        # de-dup by id
+        seen = set()
+        uniq = []
+        for ec in exact:
+            if ec.id in seen:
+                continue
+            seen.add(ec.id)
+            uniq.append(ec)
+        if len(uniq) == 1:
+            return uniq[0], uniq
+        return None, uniq
+
+    if len(partial) == 1:
+        return partial[0], [partial[0]]
+    if len(partial) > 1:
+        seen = set()
+        uniq = []
+        for ec in partial:
+            if ec.id in seen:
+                continue
+            seen.add(ec.id)
+            uniq.append(ec)
+        if len(uniq) == 1:
+            return uniq[0], uniq
+        return None, uniq
+
+    return None, []
+
+
+def _extract_instantiate_entity_intent(message: str):
+    """Detect instantiate-existing-EntityClass intent. Conservative to avoid catching 3D generation."""
+    msg = (message or "").strip()
+    norm = _norm_text(msg)
+    if not norm:
+        return None
+    # avoid catching text-to-3d generation prompts
+    if _extract_3d_generation_intent(msg):
+        # "3D model üret/oluştur/generate" is generation, not instantiate of existing class
+        # but allow explicit instantiate words even if "3d" present
+        if "instantiate" not in norm and "ornekle" not in norm and "örnekle" not in norm and "ornek" not in norm:
+            return None
+    has_instantiate = any(k in norm for k in ("instantiate", "ornekle", "ornek olustur", "ornekini olustur", "instance"))
+    has_class_ref = any(k in norm for k in ("sinif", "sınıf", "entity class", "entityclass", "varligi", "varlığı"))
+    has_action = any(k in norm for k in ("sahneye ekle", "sahneye yerlestir", "sahneye yerlestir", "ekle", "yerlestir", "yerleştir", "olustur", "oluştur", "koy", "spawn"))
+    # Heuristic: explicit instantiate terms, or "class + place/add" phrasing
+    if has_instantiate and (has_class_ref or has_action):
+        return {"type": "instantiate_entity_class"}
+    if has_class_ref and any(k in norm for k in ("sahneye ekle", "sahneye yerlestir", "sahneye yerleştir", "instantiate", "ornekle", "ornek olustur")):
+        return {"type": "instantiate_entity_class"}
+    # common phrasing: "<name> sınıfını sahneye ekle" / "mevcut <name> entity'sini ekle"
+    if ("sınıf" in msg.lower() or "sinif" in norm) and any(k in norm for k in ("sahneye ekle", "sahneye yerlestir", "sahneye yerleştir", "ekle")):
+        # exclude pure generation requests
+        if not any(k in norm for k in ("uret", "generate", "text to 3d", "text-to-3d")):
+            return {"type": "instantiate_entity_class"}
+    return None
+
+
+def _build_entity_class_choice_options(user, message=""):
+    resolved, candidates = _resolve_entity_class_from_message(message, user)
+    options = []
+    if resolved is not None:
+        options.append({
+            "key": "1",
+            "id": f"entity_class:{resolved.id}",
+            "action": "select_entity_class",
+            "type": "entity_class",
+            "class_id": str(resolved.id),
+            "label": getattr(resolved, "name", "EntityClass"),
+        })
+        return options, [resolved], resolved
+    if candidates:
+        for idx, ec in enumerate(candidates[:20], start=1):
+            options.append({
+                "key": str(idx),
+                "id": f"entity_class:{ec.id}",
+                "action": "select_entity_class",
+                "type": "entity_class",
+                "class_id": str(ec.id),
+                "label": getattr(ec, "name", f"EntityClass {idx}"),
+            })
+        return options, candidates, None
+    # no candidates from message; list user-accessible classes for selection
+    try:
+        all_classes = list(_user_accessible_entity_classes(user).order_by("name")[:30])
+    except Exception:
+        all_classes = []
+    for idx, ec in enumerate(all_classes, start=1):
+        options.append({
+            "key": str(idx),
+            "id": f"entity_class:{ec.id}",
+            "action": "select_entity_class",
+            "type": "entity_class",
+            "class_id": str(ec.id),
+            "label": getattr(ec, "name", f"EntityClass {idx}"),
+        })
+    return options, all_classes, None
+
+
+def format_instantiate_entity_question(pending: dict) -> str:
+    params = (pending or {}).get("params") or {}
+    options = (pending or {}).get("options") or []
+    missing = list((pending or {}).get("missing") or [])
+    class_name = params.get("class_name") or params.get("entity_class_name")
+    if "class" in missing or "entity_class" in missing:
+        lines = ["Hangi EntityClass örneklenecek? Lütfen bir sınıf seçin (tahmin yapmadan ilerleyebilmem için seçiminiz gerekli):"]
+        if options:
+            for i, opt in enumerate(options, start=1):
+                key = opt.get("key") or str(i)
+                label = opt.get("label") or opt.get("name") or "Sınıf"
+                lines.append(f"{key}) {label}")
+        else:
+            lines.append("(Kullanılabilir EntityClass bulunamadı. Lütfen sınıf adını net belirtin.)")
+        lines.append("")
+        lines.append("Yanıt olarak seçenek numarasını veya sınıf adını yazabilirsiniz.")
+        return "\n".join(lines)
+    # class known, ask scene/placement
+    title = "EntityClass örneği için hedef sahne/yerleştirme seçin (tahmin yapmadan ilerleyebilmem için seçiminiz gerekli):"
+    lines = [title]
+    if class_name:
+        lines.insert(1, f"Sınıf: {class_name}")
+    for i, opt in enumerate(options, start=1):
+        key = opt.get("key") or str(i)
+        label = opt.get("label") or opt.get("name") or "Seçenek"
+        extra = f" [sahne:{opt.get('scene_id')}]" if opt.get("scene_id") else ""
+        lines.append(f"{key}) {label}{extra}")
+    lines.append("")
+    lines.append("Yanıt olarak seçenek numarasını, sahne adını/ID'sini veya seçeneği yazabilirsiniz.")
+    return "\n".join(lines)
+
+
+def execute_instantiate_entity_class(pending: dict, selected: dict, user):
+    params = (pending or {}).get("params") or {}
+    missing = list((pending or {}).get("missing") or [])
+
+    # Step 1: class selection pending
+    if selected.get("action") == "select_entity_class" or "class" in missing or "entity_class" in missing:
+        class_id = selected.get("class_id")
+        ec = None
+        if class_id:
+            try:
+                ec = _user_accessible_entity_classes(user).filter(id=class_id).first()
+            except Exception:
+                ec = None
+        if ec is None:
+            return {"ok": False, "error": "Seçilen EntityClass bulunamadı veya erişim yok.", "code": "entity_class_not_found"}
+        # Now ask for scene/placement (never auto-select scene)
+        options, scenes = build_scene_choice_options(user, include_store_only=True, store_label="Sahneye yerleştirme, sadece üret/sakla (sahnesiz)")
+        # Store as follow-up pending by returning special marker? easier: caller should set new pending.
+        # But execute_* returns result after pending cleared; we need to keep asking. Handle in try_handle_pending_action.
+        return {
+            "ok": True,
+            "needs_followup_choice": True,
+            "next_pending_action": {
+                "id": uuid.uuid4().hex,
+                "type": "instantiate_entity_class",
+                "created_at": _now_iso(),
+                "params": {**params, "class_id": str(ec.id), "class_name": ec.name},
+                "options": options,
+                "missing": ["scene"],
+            },
+            "message": format_instantiate_entity_question({
+                "type": "instantiate_entity_class",
+                "params": {**params, "class_id": str(ec.id), "class_name": ec.name},
+                "options": options,
+                "missing": ["scene"],
+            }),
+        }
+
+    # Step 2: scene/placement selection (class known)
+    class_id = params.get("class_id")
+    ec = None
+    if class_id:
+        try:
+            ec = _user_accessible_entity_classes(user).filter(id=class_id).first()
+        except Exception:
+            ec = None
+    if ec is None:
+        # try resolve again from name
+        ec, _ = _resolve_entity_class_from_message(params.get("class_name") or "", user)
+    if ec is None:
+        return {"ok": False, "error": "EntityClass bulunamadı veya erişim yok.", "code": "entity_class_not_found"}
+
+    action = str(selected.get("action") or selected.get("type") or "")
+    scene = None
+    place = False
+    if action in ("store_only", "file_only", "sahnesiz"):
+        scene = None
+        place = False
+    elif action in ("place_existing_scene", "scene"):
+        scene_id = selected.get("scene_id")
+        if scene_id:
+            try:
+                scene = Scene.objects.filter(id=scene_id, user=user).first()
+            except Exception:
+                scene = None
+        if scene is None:
+            return {"ok": False, "error": "Seçilen sahne bulunamadı.", "code": "scene_not_found"}
+        place = True
+    elif action in ("create_new_scene", "new_scene"):
+        scene = _create_scene_for_user(user, selected.get("scene_name") or "Yeni Sahne")
+        place = True
+    else:
+        return {"ok": False, "error": "Geçersiz seçim.", "code": "invalid_option"}
+
+    try:
+        from agent_app import entity_system
+        instance, asset, node = entity_system.instantiate_entity_class(
+            ec, user=user, scene=scene, name=(params.get("instance_name") or ec.name), parameters=params.get("parameters") or {}, place=place
+        )
+    except Exception as exc:
+        return {"ok": False, "error": f"Instantiate başarısız: {exc}", "code": "instantiate_failed"}
+
+    media = []
+    try:
+        if asset and getattr(asset, "file", None):
+            url = asset.file.url
+        else:
+            url = ""
+    except Exception:
+        url = ""
+    media.append({
+        "type": "3d_model",
+        "kind": "3d_model",
+        "name": getattr(asset, "name", None) or getattr(instance, "name", None) or ec.name,
+        "url": url,
+        "download_url": url,
+        "status": "completed",
+        "scene_id": str(scene.id) if scene else None,
+        "asset_id": str(asset.id) if asset else None,
+        "node_id": str(node.id) if node else None,
+        "entity_instance_id": str(getattr(instance, "id", "") or ""),
+        "entity_class_id": str(ec.id),
+    })
+    if scene and place:
+        msg = f"'{ec.name}' sınıfı '{scene.name}' sahnesine eklendi."
+    else:
+        msg = f"'{ec.name}' sınıfı sahnesiz olarak oluşturuldu/saklandı."
+    return {
+        "ok": True,
+        "message": msg,
+        "attachments": media,
+        "media": media,
+        "scene_id": str(scene.id) if scene else None,
+        "entity_instance_id": str(getattr(instance, "id", "") or ""),
+    }
+
+
+def maybe_handle_instantiate_entity_intent(conversation, user, message: str):
+    intent = _extract_instantiate_entity_intent(message)
+    if not intent:
+        return None
+    resolved, candidates = _resolve_entity_class_from_message(message, user)
+    params = {"user_message": (message or "")[:2000]}
+    if resolved is not None:
+        params["class_id"] = str(resolved.id)
+        params["class_name"] = resolved.name
+        options, scenes = build_scene_choice_options(user, include_store_only=True, store_label="Sahneye yerleştirme, sadece üret/sakla (sahnesiz)")
+        pending = {
+            "id": uuid.uuid4().hex,
+            "type": "instantiate_entity_class",
+            "created_at": _now_iso(),
+            "params": params,
+            "options": options,
+            "missing": ["scene"],
+        }
+        question = format_instantiate_entity_question(pending)
+    else:
+        # ambiguous or unspecified class: ask user to choose class (no guessing)
+        class_options, _, _ = _build_entity_class_choice_options(user, message)
+        if not class_options:
+            # cannot proceed without a class; ask explicitly
+            pending = {
+                "id": uuid.uuid4().hex,
+                "type": "instantiate_entity_class",
+                "created_at": _now_iso(),
+                "params": params,
+                "options": [],
+                "missing": ["class"],
+            }
+            question = "Hangi EntityClass örneklenecek? Lütfen sınıf adını net belirtin (tahmin yapmadan ilerleyemem)."
+        else:
+            pending = {
+                "id": uuid.uuid4().hex,
+                "type": "instantiate_entity_class",
+                "created_at": _now_iso(),
+                "params": params,
+                "options": class_options,
+                "missing": ["class"],
+            }
+            question = format_instantiate_entity_question(pending)
+    meta = dict(conversation.meta_data or {})
+    meta["pending_action"] = pending
+    conversation.meta_data = meta
+    try:
+        conversation.save()
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "intent": "chat",
+        "reply": question,
+        "conversation_id": str(conversation.id),
+        "pending_action": pending,
+        "needs_user_choice": True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Video edit disambiguation (spec 8.6)
+# ---------------------------------------------------------------------------
+
+def _is_explicit_user_videos_request(message: str) -> bool:
+    norm = _norm_text(message)
+    # explicit request to pick from user's videos/library
+    phrases = (
+        "videolarimdan", "videolarımdan", "videolarim arasindan", "videolarım arasından",
+        "kendi videolarimdan", "kendi videolarımdan", "videolarimdan sec", "videolarımdan seç",
+        "video listemden", "kutuphanemden", "kütüphanemden", "mevcut videolarimdan", "mevcut videolarımdan",
+        "my videos", "from my videos", "video library",
+    )
+    return any(p in norm for p in phrases)
+
+
+def _collect_conversation_video_candidates(conversation, limit=20):
+    candidates = []
+    try:
+        nodes = conversation.nodes.order_by("-timestamp")[:200]
+    except Exception:
+        nodes = []
+    seen_jobs = set()
+    for node in nodes:
+        try:
+            meta = getattr(node, "meta_data", None) or {}
+            atts = meta.get("attachments") or []
+        except Exception:
+            atts = []
+        if not isinstance(atts, list):
+            continue
+        for att in atts:
+            if not isinstance(att, dict):
+                continue
+            job_kind = str(att.get("job_kind") or "").lower()
+            atype = str(att.get("type") or "").lower()
+            kind = str(att.get("kind") or "").lower()
+            job_id = str(att.get("job_id") or att.get("id") if job_kind == "video" and att.get("job_id") else (att.get("job_id") or ""))
+            # conversation video results: job_kind video or explicit video result attachment
+            is_video = job_kind == "video" or atype == "video" or kind == "video"
+            if not is_video:
+                continue
+            # prefer job-backed videos (editable via existing API)
+            if not job_id:
+                # try to infer from download_url like /api/video/<id>/download/
+                url = str(att.get("download_url") or att.get("url") or "")
+                m = re.search(r"/api/video/([^/]+)/", url)
+                if m:
+                    job_id = m.group(1)
+            if not job_id or job_id in seen_jobs:
+                continue
+            seen_jobs.add(job_id)
+            label = att.get("name") or att.get("prompt") or f"Video {job_id[:8]}"
+            status = att.get("status") or "ready"
+            candidates.append({
+                "job_id": job_id,
+                "label": str(label)[:120],
+                "status": str(status),
+                "source": "conversation",
+            })
+            if len(candidates) >= limit:
+                return candidates
+    return candidates
+
+
+def _list_user_video_options(user, limit=20):
+    opts = []
+    if user is None:
+        return opts
+    try:
+        qs = VideoJob.objects.filter(user=user).order_by("-created_at")[:limit]
+        for v in qs:
+            label = (getattr(v, "prompt", None) or getattr(v, "instruction", None) or "Video")[:80]
+            status = getattr(v, "status", "")
+            opts.append({
+                "job_id": str(v.id),
+                "label": f"{label} ({status})" if status else label,
+                "status": status,
+                "source": "user_videos",
+            })
+    except Exception:
+        return []
+    return opts
+
+
+def _strip_video_edit_command(text: str) -> str:
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    # try to take content after ':' if present and meaningful
+    if ":" in raw:
+        tail = raw.split(":", 1)[1].strip()
+        if len(tail) >= 3:
+            return tail[:2000]
+    cleaned = re.sub(r"(?i)\b(bu|su|şu|o)?\s*(videoyu|video|videoda)\b", " ", raw)
+    cleaned = re.sub(r"(?i)\b(duzenle|düzenle|edit|duzenler misin|düzenler misin)\b", " ", cleaned)
+    cleaned = re.sub(r"(?i)\b(lutfen|lütfen)\b", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,.!?")
+    if len(cleaned) < 3:
+        return ""
+    # if it's effectively same as a generic request, treat unclear
+    if _norm_text(cleaned) in ("", "bunu", "onu", "sunuu", "bunu duzenle", "bunu düzenle"):
+        return ""
+    return cleaned[:2000]
+
+
+def _extract_video_edit_intent(message: str):
+    msg = (message or "").strip()
+    norm = _norm_text(msg)
+    if not norm:
+        return None
+
+    explicit_edit_markers = (
+        "duzenle", "düzenle", "edit", "trim", "kes", "kirp", "kırp", "crop",
+        "efekt ekle", "efekt", "hizlandir", "hızlandır", "yavaslat", "yavaşlat",
+        "slow motion", "subtitle", "altyazi", "altyazı", "rotate", "dondur", "döndür",
+        "ses ekle", "muzik ekle", "müzik ekle", "sesi cikar", "sesi çıkar",
+    )
+    transform_markers = ("gif yap", "gif'e cevir", "gif e cevir", "mp3 yap", "ses dosyasi yap", "thumbnail")
+    refers_existing = any(k in norm for k in ("bu video", "su video", "şu video", "bu videoyu", "su videoyu", "şu videoyu", "mevcut video", "videoyu", "videoda"))
+
+    # "video üret/oluştur/generate" is generation, but allow explicit edit/transform requests on existing video
+    if _extract_video_generation_intent(msg):
+        if not (("video" in norm and refers_existing and any(k in norm for k in (explicit_edit_markers + transform_markers + ("gif",)))) or any(k in norm for k in explicit_edit_markers)):
+            return None
+
+    if "video" in norm and any(k in norm for k in explicit_edit_markers):
+        instruction = _strip_video_edit_command(msg)
+        return {"type": "edit_video", "instruction": instruction}
+
+    # "bu videoyu gif yap" / similar transforms on an existing/referenced video -> edit intent
+    if "video" in norm and refers_existing and any(k in norm for k in ("gif", "mp3", "thumbnail", "kes", "kirp", "kırp", "trim")):
+        instruction = _strip_video_edit_command(msg)
+        return {"type": "edit_video", "instruction": instruction or msg}
+
+    # generic "bu videoyu düzenle"
+    if "video" in norm and ("duzenle" in norm or "düzenle" in norm or "edit" in norm):
+        instruction = _strip_video_edit_command(msg)
+        return {"type": "edit_video", "instruction": instruction}
+    return None
+
+
+def format_edit_video_question(pending: dict) -> str:
+    params = (pending or {}).get("params") or {}
+    options = (pending or {}).get("options") or []
+    missing = list((pending or {}).get("missing") or [])
+    lines = []
+    if "target" in missing:
+        source = params.get("target_source") or "conversation"
+        if source == "user_videos":
+            lines.append("Hangi videoyu düzenlemek istediğinizi seçin (videolarınızdan). Tahmin yapmadan ilerleyebilmem için seçiminiz gerekli:")
+        else:
+            lines.append("Hangi videoyu düzenlemek istediğinizi seçin (bu sohbet akışındaki video medya/sonuçlarından). Tahmin yapmadan ilerleyebilmem için seçiminiz gerekli:")
+        for i, opt in enumerate(options, start=1):
+            key = opt.get("key") or str(i)
+            label = opt.get("label") or "Video"
+            extra = f" [video:{opt.get('job_id')}]" if opt.get("job_id") else ""
+            lines.append(f"{key}) {label}{extra}")
+        if not options:
+            lines.append("(Seçilebilir video bulunamadı. Lütfen hedef videoyu net belirtin.)")
+        lines.append("")
+        lines.append("Yanıt olarak seçenek numarasını veya video ID'sini yazabilirsiniz.")
+        return "\n".join(lines)
+    if "instruction" in missing:
+        target_label = params.get("target_label") or params.get("target_job_id") or "seçilen video"
+        lines.append(f"'{target_label}' için düzenleme talimatını net yazın (mevcut düzenleme yetenekleri uygulanır). Tahmin yapmadan ilerleyebilmem için talimat gerekli:")
+        lines.append("Örnek: 'videoyu 5 saniyeye kırp', 'gif yap', 'sesi çıkar' vb.")
+        return "\n".join(lines)
+    # generic
+    return format_pending_question(pending)
+
+
+def execute_edit_video(pending: dict, selected: dict, user):
+    params = (pending or {}).get("params") or {}
+    missing = list((pending or {}).get("missing") or [])
+
+    # Target selection step
+    if "target" in missing or selected.get("action") == "select_video":
+        job_id = selected.get("job_id") or params.get("target_job_id")
+        if not job_id:
+            return {"ok": False, "error": "Video hedefi seçilmedi.", "code": "video_target_missing"}
+        # ownership check
+        job = None
+        try:
+            job = VideoJob.objects.filter(id=job_id, user=user).first()
+        except Exception:
+            job = None
+        if job is None:
+            return {"ok": False, "error": "Seçilen video bulunamadı veya erişim yok.", "code": "video_not_found"}
+        target_label = selected.get("label") or params.get("target_label") or (getattr(job, "prompt", None) or "Video")
+        instruction = (params.get("instruction") or "").strip()
+        if not instruction:
+            # ask for instruction next
+            return {
+                "ok": True,
+                "needs_followup_choice": True,
+                "next_pending_action": {
+                    "id": uuid.uuid4().hex,
+                    "type": "edit_video",
+                    "created_at": _now_iso(),
+                    "params": {**params, "target_job_id": str(job.id), "target_label": str(target_label)[:120], "instruction": ""},
+                    "options": [],
+                    "missing": ["instruction"],
+                },
+                "message": format_edit_video_question({
+                    "type": "edit_video",
+                    "params": {**params, "target_job_id": str(job.id), "target_label": str(target_label)[:120]},
+                    "options": [],
+                    "missing": ["instruction"],
+                }),
+            }
+        # both known -> execute below using params updated
+        params = {**params, "target_job_id": str(job.id), "target_label": str(target_label)[:120], "instruction": instruction}
+
+    # Instruction provided as free text (target already known)
+    job_id = params.get("target_job_id")
+    instruction = (params.get("instruction") or "").strip()
+    if not job_id or not instruction:
+        return {"ok": False, "error": "Video düzenleme için hedef ve talimat gerekli.", "code": "video_edit_incomplete"}
+    try:
+        job = VideoJob.objects.filter(id=job_id, user=user).first()
+    except Exception:
+        job = None
+    if job is None:
+        return {"ok": False, "error": "Video bulunamadı veya erişim yok.", "code": "video_not_found"}
+    try:
+        from agent_app import video_generation as vg
+        updated = vg._edit_video_impl(str(job.id), instruction)
+        try:
+            updated.refresh_from_db()
+        except Exception:
+            pass
+        job = updated if isinstance(updated, VideoJob) else VideoJob.objects.get(id=job.id)
+    except Exception as exc:
+        try:
+            job.status = "failed"
+            job.error = str(exc)
+            job.save(update_fields=["status", "error"])
+        except Exception:
+            pass
+        return {"ok": False, "error": f"Video düzenleme başarısız: {exc}", "code": "video_edit_failed"}
+
+    poll_url = f"/api/video/{job.id}/"
+    att = _job_attachment("video", job, poll_url=poll_url)
+    status = getattr(job, "status", "pending")
+    if status == "completed":
+        msg = f"Video düzenleme tamamlandı: {params.get('target_label') or 'video'}"
+    elif status == "failed":
+        msg = f"Video düzenleme başarısız oldu: {getattr(job, 'error', '') or 'bilinmeyen hata'}"
+    else:
+        msg = f"Video düzenleme başlatıldı (durum: {status})."
+    return {
+        "ok": status != "failed",
+        "message": msg,
+        "attachments": [att],
+        "media": [att],
+        "job": {"id": str(job.id), "kind": "video", "status": status, "poll_url": poll_url},
+        "pending_jobs": [] if status in ("completed", "failed") else [{"id": str(job.id), "kind": "video", "poll_url": poll_url, "status": status}],
+    }
+
+
+def maybe_handle_chat_video_edit(conversation, user, message: str):
+    intent = _extract_video_edit_intent(message)
+    if not intent:
+        return None
+    instruction = (intent.get("instruction") or "").strip()
+    explicit_user = _is_explicit_user_videos_request(message)
+
+    if explicit_user:
+        candidates = _list_user_video_options(user)
+        source = "user_videos"
+    else:
+        candidates = _collect_conversation_video_candidates(conversation)
+        source = "conversation"
+
+    # If conversation has no candidates and not explicitly asking user videos, it's ambiguous/unsupported to guess;
+    # but if there are user videos and request is clearly an edit request in chat context, spec says priority is conversation media/results.
+    # With no conversation video targets, we must ask user to specify/choose (could offer user's videos only if explicitly requested;
+    # otherwise ask them to clarify target from conversation or explicitly request from their videos?) - to avoid guessing, ask.
+    options = []
+    for idx, c in enumerate(candidates[:20], start=1):
+        options.append({
+            "key": str(idx),
+            "id": f"video_job:{c['job_id']}",
+            "action": "select_video",
+            "type": "video",
+            "job_id": c["job_id"],
+            "label": c.get("label") or f"Video {idx}",
+        })
+
+    # Determine missing pieces
+    if len(options) == 1 and instruction:
+        # Unambiguous target in prioritized source and instruction clear -> execute directly
+        selected = options[0]
+        exec_result = execute_edit_video({
+            "type": "edit_video",
+            "params": {"instruction": instruction, "target_job_id": selected.get("job_id"), "target_label": selected.get("label")},
+            "missing": [],
+        }, selected, user)
+        return {
+            "ok": bool(exec_result.get("ok", False)),
+            "intent": "chat",
+            "reply": exec_result.get("message") or "",
+            "conversation_id": str(conversation.id),
+            "attachments": exec_result.get("attachments") or [],
+            "media": exec_result.get("media") or [],
+            "job": exec_result.get("job"),
+            "pending_jobs": exec_result.get("pending_jobs") or [],
+            "result": exec_result,
+        }
+
+    missing = []
+    params = {"instruction": instruction, "target_source": source, "user_message": (message or "")[:2000]}
+    if len(options) != 1:
+        missing.append("target")
+    if not instruction:
+        missing.append("instruction")
+
+    # If target is unambiguous but instruction missing
+    if len(options) == 1 and "instruction" in missing:
+        params["target_job_id"] = options[0].get("job_id")
+        params["target_label"] = options[0].get("label")
+        pending = {
+            "id": uuid.uuid4().hex,
+            "type": "edit_video",
+            "created_at": _now_iso(),
+            "params": params,
+            "options": [],
+            "missing": ["instruction"],
+        }
+        question = format_edit_video_question(pending)
+    elif "target" in missing:
+        # ask for target selection (and keep instruction in params if provided for later)
+        pending = {
+            "id": uuid.uuid4().hex,
+            "type": "edit_video",
+            "created_at": _now_iso(),
+            "params": params,
+            "options": options,
+            "missing": ["target"] + (["instruction"] if not instruction else []),
+        }
+        # If no options at all, be explicit
+        if not options:
+            if source == "conversation":
+                question = (
+                    "Video düzenlemek için bu sohbet akışında hedef bir video sonucu bulunamadı ve talimat/ hedef belirsiz olabilir. "
+                    "Lütfen düzenlemek istediğiniz videoyu bu sohbette belirtin/paylaşın veya videolarınızdan seçim istediğinizi açıkça yazın. "
+                    "Ayrıca düzenleme talimatını net belirtin (mevcut düzenleme yetenekleri uygulanır)."
+                )
+            else:
+                question = (
+                    "Videolarınız arasında düzenlenecek uygun bir video bulunamadı. "
+                    "Lütfen hedef videoyu ve düzenleme talimatını net belirtin."
+                )
+            # still store pending so user can clarify by replying? but no options to resolve; better to just ask without pending options
+            # create a clarification pending without resolvable options is tricky; instead return question without pending_action to avoid dead-end
+            return {
+                "ok": True,
+                "intent": "chat",
+                "reply": question,
+                "conversation_id": str(conversation.id),
+                "needs_user_choice": True,
+            }
+        question = format_edit_video_question(pending)
+    else:
+        # shouldn't happen, but ask generically
+        pending = {
+            "id": uuid.uuid4().hex,
+            "type": "edit_video",
+            "created_at": _now_iso(),
+            "params": params,
+            "options": options,
+            "missing": missing or ["target", "instruction"],
+        }
+        question = format_edit_video_question(pending)
+
+    meta = dict(conversation.meta_data or {})
+    meta["pending_action"] = pending
+    conversation.meta_data = meta
+    try:
+        conversation.save()
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "intent": "chat",
+        "reply": question,
+        "conversation_id": str(conversation.id),
+        "pending_action": pending,
+        "needs_user_choice": True,
+    }
+
+
+def maybe_handle_chat_action_intents(conversation, user, message: str):
+    """Handle chat intents that may require clarification (EntityClass instantiate, video edit)."""
+    # EntityClass instantiate (spec 8.5c)
+    resp = maybe_handle_instantiate_entity_intent(conversation, user, message)
+    if resp:
+        return resp
+    # Video edit disambiguation (spec 8.6)
+    resp = maybe_handle_chat_video_edit(conversation, user, message)
+    if resp:
+        return resp
+    return None
+
+
+def _format_pending_question_for_type(pending: dict, user=None) -> str:
+    ptype = (pending or {}).get("type")
+    if ptype == "generate_3d":
+        return format_generate_3d_question(pending)
+    if ptype == "instantiate_entity_class":
+        return format_instantiate_entity_question(pending)
+    if ptype == "edit_video":
+        return format_edit_video_question(pending)
+    return format_pending_question(pending, user)
+
 
 def try_handle_pending_action(conversation, user, reply_text):
     """If conversation has pending_action, try to resolve and execute it. Returns response dict or None."""
@@ -1086,14 +1817,29 @@ def try_handle_pending_action(conversation, user, reply_text):
     pending = meta.get("pending_action")
     if not isinstance(pending, dict) or not pending:
         return None
-    selected, info = resolve_pending_action_reply(pending, reply_text, user)
+
+    ptype = pending.get("type")
+    params = dict((pending.get("params") or {}))
+    missing = list((pending.get("missing") or []))
+    options = list((pending.get("options") or []))
+
+    selected = None
+    info = None
+
+    # Free-text instruction step for video edit: target known, instruction missing.
+    if ptype == "edit_video" and "instruction" in missing and params.get("target_job_id") and not options:
+        instruction = (reply_text or "").strip()
+        if instruction:
+            pending = {**pending, "params": {**params, "instruction": instruction}, "missing": [m for m in missing if m != "instruction"]}
+            selected = {"action": "provide_instruction", "type": "instruction"}
+        else:
+            selected = None
+    else:
+        selected, info = resolve_pending_action_reply(pending, reply_text, user)
+
     if selected is None:
         # re-ask without guessing
-        ptype = pending.get("type")
-        if ptype == "generate_3d":
-            question = format_generate_3d_question(pending)
-        else:
-            question = format_pending_question(pending, user)
+        question = _format_pending_question_for_type(pending, user)
         return {
             "handled": True,
             "ok": True,
@@ -1104,13 +1850,38 @@ def try_handle_pending_action(conversation, user, reply_text):
             "needs_user_choice": True,
         }
 
-    ptype = pending.get("type")
     if ptype == "place_3d_upload":
         exec_result = execute_place_3d_upload(pending, selected, user)
     elif ptype == "generate_3d":
         exec_result = execute_generate_3d(pending, selected, user)
+    elif ptype == "instantiate_entity_class":
+        exec_result = execute_instantiate_entity_class(pending, selected, user)
+    elif ptype == "edit_video":
+        exec_result = execute_edit_video(pending, selected, user)
     else:
         exec_result = {"ok": False, "error": "Bu bekleyen işlem türü desteklenmiyor.", "code": "unsupported_pending"}
+
+    # Follow-up clarification (e.g. class selected -> now ask scene/placement)
+    if isinstance(exec_result, dict) and exec_result.get("needs_followup_choice") and exec_result.get("next_pending_action"):
+        next_pending = exec_result.get("next_pending_action")
+        meta["pending_action"] = next_pending
+        conversation.meta_data = meta
+        try:
+            conversation.save()
+        except Exception:
+            pass
+        reply = exec_result.get("message") or _format_pending_question_for_type(next_pending, user)
+        return {
+            "handled": True,
+            "ok": True,
+            "intent": "chat",
+            "reply": reply,
+            "conversation_id": str(conversation.id),
+            "pending_action": next_pending,
+            "needs_user_choice": True,
+            "attachments": exec_result.get("attachments") or [],
+            "media": exec_result.get("media") or [],
+        }
 
     meta.pop("pending_action", None)
     conversation.meta_data = meta

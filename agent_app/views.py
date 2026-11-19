@@ -2318,6 +2318,34 @@ def assistant_message(request):
         except Exception as exc:
             logger.warning("3d upload pending action error: %s", exc)
 
+    # Chat action intents requiring disambiguation/explicit choice (EntityClass instantiate, video edit)
+    # Checked before generation so edit/instantiate disambiguation is not misrouted as new generation.
+    try:
+        from agent_app import chat_media as chat_media_mod
+        action_resp = chat_media_mod.maybe_handle_chat_action_intents(conversation, user, raw_message)
+        if action_resp:
+            reply_text = str(action_resp.get("reply") or "")
+            assistant_meta = None
+            media_atts = action_resp.get("attachments") or action_resp.get("media") or []
+            if media_atts:
+                assistant_meta = {"attachments": media_atts}
+            _append_chat_message(conversation, "assistant", reply_text, meta_data=assistant_meta)
+            _remember_conversation(conversation, last_intent="chat", last_topic=(raw_message or "")[:1000])
+            payload = {
+                "ok": bool(action_resp.get("ok", True)),
+                "intent": "chat",
+                "reply": reply_text,
+                "attachments": media_atts or saved_chat_attachments,
+                "media": media_atts or [],
+                "conversation_id": str(conversation.id),
+            }
+            for k in ("pending_action", "needs_user_choice", "job", "jobs", "pending_jobs", "result"):
+                if k in action_resp:
+                    payload[k] = action_resp.get(k)
+            return JsonResponse(payload)
+    except Exception as exc:
+        logger.warning("chat action intent handling error: %s", exc)
+
     # Direct chat-driven generation intents (image/video/3D). 3D generation will ask for scene/placement choice.
     try:
         from agent_app import chat_media as chat_media_mod
