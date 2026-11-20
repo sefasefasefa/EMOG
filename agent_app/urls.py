@@ -22,6 +22,7 @@ from .neural_core import views as neural_views
 from . import video_views
 from . import image_views
 from . import scene_views
+from . import admin_views
 
 from .auth_views import (
     login_page, register_page, oauth_login, oauth_callback,
@@ -95,6 +96,12 @@ urlpatterns = [
     path('whatsapp/send/', __import__('agent_app.whatsapp', fromlist=['whatsapp_send']).whatsapp_send, name='whatsapp_send_short'),
 
     path('projects/', projects_page, name='projects_page'),
+
+    # Local administration panel
+    path('emog-admin/', admin_views.admin_dashboard, name='admin_dashboard'),
+    path('emog-admin/toggles/', admin_views.admin_feature_toggles, name='admin_feature_toggles'),
+    path('emog-admin/maintenance/', admin_views.admin_toggle_maintenance, name='admin_toggle_maintenance'),
+    path('emog-admin/logs/', admin_views.admin_system_logs, name='admin_system_logs'),
 
     # NEURAL CORE (bilişsel çekirdek)
     path('neural/', neural_views.neural_page, name='neural_page'),
