@@ -2034,26 +2034,6 @@ def _pil_summary_for_attachment(att) -> str:
 
 
 def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_attachments=None):
-    # External vision API disabled by default: serve local PIL analysis only
-    # (no server load, no external call).
-    if not getattr(settings, "VISION_LLM_ENABLED", False):
-        image_atts = [
-            a for a in (saved_attachments or [])
-            if isinstance(a, dict) and a.get("kind") == "image" and a.get("id")
-        ]
-        if not image_atts and user is not None:
-            image_atts = _user_latest_image_atts(user) or _conversation_latest_image_atts(conversation)
-        att = image_atts[0] if image_atts else None
-        summary = _pil_summary_for_attachment(att) if att else "Görsel dosyası okunamadı."
-        return {
-            "ok": True,
-            "intent": "chat",
-            "reply": f"Görsel analizi (yerel PIL, dış API kapalı): {summary}",
-            "attachments": image_atts,
-            "media": image_atts,
-            "analyzed_by": "pil-local",
-            "analyzed_count": len(image_atts),
-        }
     """
     Kullanici 'bu fotoğrafı analiz et' gibi bir talep + imaj eki ile sohbet ettiğinde:
     Vision destekli LLM ile eki oku ve chat yanıtında analizini açikla.
@@ -2070,6 +2050,25 @@ def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_at
         image_atts = _user_latest_image_atts(user) or _conversation_latest_image_atts(conversation)
     if not image_atts:
         return None
+    # Kullanici sadece fotoğraf paylaşmış olabilir, analiz istemiş olmayabilir.
+    # Analiz istemiyorsa sessiz kal ve normal akışa devam et.
+    if not any(k in norm for k in ("analiz", "incele", "tara", "ne gore", "bak")):
+        return None
+
+    # External vision API disabled by default: serve local PIL analysis only
+    # (no server load, no external call).
+    if not getattr(settings, "VISION_LLM_ENABLED", False):
+        att = image_atts[0] if image_atts else None
+        summary = _pil_summary_for_attachment(att) if att else "Görsel dosyası okunamadı."
+        return {
+            "ok": True,
+            "intent": "chat",
+            "reply": f"Görsel analizi (yerel PIL, dış API kapalı): {summary}",
+            "attachments": image_atts,
+            "media": image_atts,
+            "analyzed_by": "pil-local",
+            "analyzed_count": len(image_atts),
+        }
 
     def _pil_fallback_reply():
         seen_s = set()

@@ -454,15 +454,7 @@ class VisionLlmIntegrationTests(SimpleTestCase):
                 saved_attachments=[self.image_attachment],
             )
 
-        self.assertIsNotNone(result)
-        self.assertTrue(
-            result["reply"].startswith(
-                "(Dış vision hizmetine bağlanılamadı, yerel analizle devam ediliyor:"
-            ),
-            result,
-        )
-        self.assertIn("yerel özet", result["reply"])
-        self.assertEqual(result["analyzed_by"], "pil-local")
+        self.assertIsNone(result)
         mock_llm.assert_not_called()
 
     def test_enabled_configured_vision_calls_llm_with_multimodal_data_url(self):
