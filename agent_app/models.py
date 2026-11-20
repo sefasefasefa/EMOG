@@ -842,6 +842,383 @@ class VideoJob(models.Model):
     def output(self, value):
         self.output_path = value or ""
 
+
+
+
+def scene_asset_upload_to(instance, filename):
+    from django.utils.text import get_valid_filename
+    name = get_valid_filename(filename or "asset.glb")
+    user_part = "anon"
+    try:
+        if instance.user_id:
+            user_part = str(instance.user_id)
+    except Exception:
+        pass
+    scene_part = "unscoped"
+    try:
+        if instance.scene_id:
+            scene_part = str(instance.scene_id)
+    except Exception:
+        pass
+    return f"scenes/{user_part}/{scene_part}/{name}"
+
+
+class Scene(models.Model):
+    """3D sahne: obje grafi, kamera ve iskelet verilerini barindirir."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="scenes",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=200, default="Yeni Sahne")
+    description = models.TextField(blank=True, default="")
+    settings = models.JSONField(default=dict, blank=True)
+    meta = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "scene_scenes"
+        ordering = ["-updated_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"Scene {self.name} ({str(self.id)[:8]})"
+
+
+class SceneAsset(models.Model):
+    """Sahneye ait 3D dosya (glTF/glb) veya gorsel referans."""
+
+    ASSET_TYPE_CHOICES = [
+        ("gltf", "glTF/GLB"),
+        ("image", "Image"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="scene_assets",
+        null=True, blank=True,
+    )
+    scene = models.ForeignKey(
+        Scene, on_delete=models.CASCADE, related_name="assets",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=255, blank=True, default="")
+    file = models.FileField(upload_to=scene_asset_upload_to, max_length=500, blank=True, null=True)
+    file_type = models.CharField(max_length=20, choices=ASSET_TYPE_CHOICES, default="gltf")
+    source_url = models.URLField(blank=True, default="")
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "scene_assets"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["scene", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return self.name or f"Asset {str(self.id)[:8]}"
+
+
+class SceneNode(models.Model):
+    """Sahne grafindaki dugum: obje, isik, kamera veya iskelet grubu."""
+
+    NODE_TYPE_CHOICES = [
+        ("object", "Object"),
+        ("mesh", "Mesh"),
+        ("group", "Group"),
+        ("camera", "Camera"),
+        ("light", "Light"),
+        ("bone", "Bone"),
+        ("skeleton", "Skeleton"),
+        ("empty", "Empty"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scene = models.ForeignKey(
+        Scene, on_delete=models.CASCADE, related_name="nodes",
+    )
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, related_name="children",
+        null=True, blank=True,
+    )
+    asset = models.ForeignKey(
+        SceneAsset, on_delete=models.SET_NULL, related_name="nodes",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=200, default="Node")
+    node_type = models.CharField(max_length=30, choices=NODE_TYPE_CHOICES, default="object")
+    components = models.JSONField(default=dict, blank=True)
+    sort_order = models.IntegerField(default=0)
+    visible = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "scene_nodes"
+        ordering = ["sort_order", "created_at"]
+        indexes = [
+            models.Index(fields=["scene", "sort_order"]),
+            models.Index(fields=["scene", "parent"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.node_type})"
+
+
+
+
+class EntityClass(models.Model):
+    """Varlik sinifi/sablonu (ornegin Insan, Kilic). Tum uretim bu siniflardan turetilir."""
+
+    CATEGORY_CHOICES = [
+        ("character", "Character"),
+        ("human", "Human"),
+        ("creature", "Creature"),
+        ("prop", "Prop"),
+        ("weapon", "Weapon"),
+        ("vehicle", "Vehicle"),
+        ("environment", "Environment"),
+        ("camera", "Camera"),
+        ("light", "Light"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="entity_classes",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, blank=True, default="")
+    category = models.CharField(max_length=40, choices=CATEGORY_CHOICES, default="other")
+    description = models.TextField(blank=True, default="")
+    # components_template: identity, transform, mesh, skeleton, animation, physics, render
+    components_template = models.JSONField(default=dict, blank=True)
+    # skeleton_template: explicit bones/joints hierarchy for quick access
+    skeleton_template = models.JSONField(default=dict, blank=True)
+    render_template = models.JSONField(default=dict, blank=True)
+    parameters = models.JSONField(default=dict, blank=True)
+    is_system = models.BooleanField(default=False)
+    version = models.IntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "entity_classes"
+        ordering = ["category", "name", "-updated_at"]
+        indexes = [
+            models.Index(fields=["user", "category"]),
+            models.Index(fields=["is_system", "category"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.category})"
+
+
+class EntityInstance(models.Model):
+    """Bir EntityClass'in somut ornegi; sahneye yerlestirilmeden once/sonra izlenebilir."""
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("generated", "Generated"),
+        ("rendered", "Rendered"),
+        ("placed", "Placed"),
+        ("archived", "Archived"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="entity_instances",
+        null=True, blank=True,
+    )
+    entity_class = models.ForeignKey(
+        EntityClass, on_delete=models.CASCADE, related_name="instances",
+    )
+    scene = models.ForeignKey(
+        Scene, on_delete=models.SET_NULL, related_name="entity_instances",
+        null=True, blank=True,
+    )
+    node = models.ForeignKey(
+        SceneNode, on_delete=models.SET_NULL, related_name="entity_instances",
+        null=True, blank=True,
+    )
+    asset = models.ForeignKey(
+        SceneAsset, on_delete=models.SET_NULL, related_name="entity_instances",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    components = models.JSONField(default=dict, blank=True)  # resolved/overridden
+    parameters = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "entity_instances"
+        ordering = ["-updated_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-updated_at"]),
+            models.Index(fields=["entity_class", "-updated_at"]),
+            models.Index(fields=["scene", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.name} [{self.status}]"
+
+
+class LearnedEntityKnowledge(models.Model):
+    """3D varlık/sınıf için araştırma ile öğrenilen (şablonsuz) bilgi modeli."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="learned_entity_knowledge",
+        null=True, blank=True,
+    )
+    concept = models.CharField(max_length=200, db_index=True)
+    normalized_concept = models.CharField(max_length=220, db_index=True, blank=True, default="")
+    category = models.CharField(max_length=40, blank=True, default="other")
+    # Bottom-up hiyerarşi: en temel katmandan yukarıya (katmanlar/parçalar/bileşim)
+    hierarchy = models.JSONField(default=dict, blank=True)
+    # Çıkarılmış özellikler/bileşenler/parametreler/fizik/animasyon/render ipuçları
+    features = models.JSONField(default=dict, blank=True)
+    # Araştırma kaynakları ve özetler
+    sources = models.JSONField(default=list, blank=True)
+    research_summary = models.TextField(blank=True, default="")
+    research_history = models.JSONField(default=list, blank=True)
+    confidence = models.FloatField(default=0.0)
+    research_count = models.IntegerField(default=0)
+    last_researched_at = models.DateTimeField(null=True, blank=True)
+    # Dinamik olarak üretilen sınıf spec'i (EntityClass alanlarına map edilebilir)
+    learned_spec = models.JSONField(default=dict, blank=True)
+    entity_class = models.ForeignKey(
+        EntityClass, on_delete=models.SET_NULL, related_name="learned_knowledge",
+        null=True, blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "learned_entity_knowledge"
+        ordering = ["-updated_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "normalized_concept"]),
+            models.Index(fields=["normalized_concept", "-updated_at"]),
+            models.Index(fields=["category", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.concept} ({self.category})"
+
+
+class LearnedVideoKnowledge(models.Model):
+    """Video üretimi için başarı/araştırma ile öğrenilen ayrı bilgi modeli."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="learned_video_knowledge",
+        null=True, blank=True,
+    )
+    key = models.CharField(max_length=200, db_index=True, blank=True, default="global")
+    # Öğrenilmiş profil/kurallar/tercihler (prompt kalıpları, ayarlar, sağlayıcı başarıları vb.)
+    profile = models.JSONField(default=dict, blank=True)
+    insights = models.JSONField(default=list, blank=True)
+    sources = models.JSONField(default=list, blank=True)
+    research_summary = models.TextField(blank=True, default="")
+    research_history = models.JSONField(default=list, blank=True)
+    successful_jobs = models.IntegerField(default=0)
+    failed_jobs = models.IntegerField(default=0)
+    last_learned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "learned_video_knowledge"
+        ordering = ["-updated_at", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "key"]),
+            models.Index(fields=["key", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        scope = self.user_id or "global"
+        return f"video:{self.key}:{scope}"
+
+
+class SceneGenerationJob(models.Model):
+    """3D sahne/varlık üretimi için async job (procedural + harici sağlayıcı hook)."""
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("queued", "Queued"),
+        ("running", "Running"),
+        ("completed", "Completed"),
+        ("failed", "Failed"),
+    ]
+    MODE_CHOICES = [
+        ("procedural", "Procedural"),
+        ("text_to_3d", "Text to 3D"),
+        ("image_to_3d", "Image to 3D"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="scene_generation_jobs",
+        null=True, blank=True,
+    )
+    scene = models.ForeignKey(
+        Scene, on_delete=models.SET_NULL, related_name="generation_jobs",
+        null=True, blank=True,
+    )
+    entity_class = models.ForeignKey(
+        EntityClass, on_delete=models.SET_NULL, related_name="generation_jobs",
+        null=True, blank=True,
+    )
+    provider = models.CharField(max_length=32, default="procedural", db_index=True)
+    mode = models.CharField(max_length=32, choices=MODE_CHOICES, default="procedural")
+    prompt = models.TextField(blank=True, default="")
+    input_path = models.CharField(max_length=500, blank=True, default="")
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="pending", db_index=True)
+    progress = models.PositiveSmallIntegerField(default=0)
+    output_asset = models.ForeignKey(
+        SceneAsset, on_delete=models.SET_NULL, related_name="generation_jobs",
+        null=True, blank=True,
+    )
+    output_node = models.ForeignKey(
+        SceneNode, on_delete=models.SET_NULL, related_name="generation_jobs",
+        null=True, blank=True,
+    )
+    parameters = models.JSONField(default=dict, blank=True)
+    result = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
+    consistency = models.JSONField(default=dict, blank=True)  # locked_fields, stable_id snapshot
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "scene_generation_jobs"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["scene", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"3DJob {str(self.id)[:8]} ({self.provider}/{self.status})"
+
+
+
+
 def chat_attachment_upload_to(instance, filename):
     from django.utils.text import get_valid_filename
 
@@ -971,3 +1348,6 @@ from .neural_core.models import (  # noqa: E402,F401
     NeuralRun,
     NeuralToolApproval,
 )
+
+# Admin paneli modelleri (migration için bulunabilir olmalı)
+from . import admin_models  # noqa: E402,F401
