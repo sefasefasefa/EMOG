@@ -125,6 +125,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'agent_app.middleware.MaintenanceMiddleware',
+    'agent_app.middleware.FeatureToggleMiddleware',
     'django_otp.middleware.OTPMiddleware',
     # Hata takibi: istek baglami ve stack trace yakalar
     'agent_app.error_tracking.ErrorTrackingMiddleware',
@@ -299,6 +301,15 @@ CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8002', 'http://localhost:8002', 'https
 # Default False: no external vision API call is made — image analysis runs locally
 # via Pillow (PIL) only, so the server takes no extra load.
 VISION_LLM_ENABLED = os.getenv("VISION_LLM_ENABLED", "false").lower() in ("true", "1", "yes")
+
+# Optional external vision (image understanding) API integration.
+# Disabled by default — no external call, no server load. When enabled, fill
+# VISION_LLM_MODEL / VISION_LLM_BASE_URL / VISION_LLM_API_KEY to use an
+# external multimodal LLM; failures fall back to local PIL analysis.
+VISION_LLM_MODEL = os.getenv("VISION_LLM_MODEL", "")
+VISION_LLM_BASE_URL = os.getenv("VISION_LLM_BASE_URL", "")
+VISION_LLM_API_KEY = os.getenv("VISION_LLM_API_KEY", "")
+VISION_LLM_TIMEOUT = int(os.getenv("VISION_LLM_TIMEOUT", "60"))
 
 # Canlı preview testi (Playwright) için yerel kimlik doğrulama token'ı.
 # Sadece aynı süreçte çalışan QA tarayıcısı bu header'ı gönderir; preview

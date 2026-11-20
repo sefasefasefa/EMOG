@@ -1,9 +1,11 @@
 # agent_app/tests_chat_media.py
 import json
 import tempfile
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from agent_app.models import ChatAttachment, Conversation, ImageJob, Node, User, Scene, SceneAsset, SceneNode
 
@@ -394,3 +396,141 @@ class ChatAttachmentApiAndHistoryTests(TestCase):
                 self.assertIn(str(v2.id), option_job_ids)
                 self.assertNotIn(str(v_other.id), option_job_ids)
                 self.assertEqual(mock_llm.call_count, 0)
+
+
+class VisionLlmIntegrationTests(SimpleTestCase):
+    image_attachment = {
+        "id": "vision-attachment-1",
+        "kind": "image",
+        "mime": "image/png",
+    }
+    configured_vision = {
+        "VISION_LLM_MODEL": "vision/test-model",
+        "VISION_LLM_BASE_URL": "https://vision.example/v1",
+        "VISION_LLM_API_KEY": "test-api-key",
+    }
+
+    @staticmethod
+    def _response(content):
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+        )
+
+    def test_disabled_external_vision_uses_pil_without_calling_llm(self):
+        from agent_app.chat_media import maybe_handle_chat_vision_analysis
+
+        with override_settings(VISION_LLM_ENABLED=False, **self.configured_vision), \
+             patch("agent_app.views.llm_create_vision") as mock_llm, \
+             patch("agent_app.chat_media._pil_summary_for_attachment", return_value="yerel özet"):
+            result = maybe_handle_chat_vision_analysis(
+                None,
+                None,
+                "bu fotoğrafı analiz et",
+                saved_attachments=[self.image_attachment],
+            )
+
+        self.assertEqual(
+            result["reply"],
+            "Görsel analizi (yerel PIL, dış API kapalı): yerel özet",
+        )
+        self.assertEqual(result["analyzed_by"], "pil-local")
+        mock_llm.assert_not_called()
+
+    def test_enabled_vision_without_configuration_uses_pil_without_calling_llm(self):
+        from agent_app.chat_media import maybe_handle_chat_vision_analysis
+
+        with override_settings(
+            VISION_LLM_ENABLED=True,
+            VISION_LLM_MODEL="",
+            VISION_LLM_BASE_URL="",
+            VISION_LLM_API_KEY="",
+        ), patch("agent_app.views.llm_create_vision") as mock_llm, \
+             patch("agent_app.chat_media._attachment_image_bytes", return_value=b"image-bytes"), \
+             patch("agent_app.chat_media._pil_summary_for_attachment", return_value="yerel özet"):
+            result = maybe_handle_chat_vision_analysis(
+                None,
+                None,
+                "merhaba",
+                saved_attachments=[self.image_attachment],
+            )
+
+        self.assertIsNotNone(result)
+        self.assertTrue(
+            result["reply"].startswith(
+                "(Dış vision hizmetine bağlanılamadı, yerel analizle devam ediliyor:"
+            ),
+            result,
+        )
+        self.assertIn("yerel özet", result["reply"])
+        self.assertEqual(result["analyzed_by"], "pil-local")
+        mock_llm.assert_not_called()
+
+    def test_enabled_configured_vision_calls_llm_with_multimodal_data_url(self):
+        from agent_app.chat_media import maybe_handle_chat_vision_analysis
+
+        with override_settings(VISION_LLM_ENABLED=True, **self.configured_vision), \
+             patch("agent_app.views.llm_create_vision", return_value=self._response("Dış model yanıtı")) as mock_llm, \
+             patch("agent_app.chat_media._attachment_image_bytes", return_value=b"image-bytes"):
+            result = maybe_handle_chat_vision_analysis(
+                None,
+                None,
+                "bu fotoğrafı analiz et",
+                saved_attachments=[self.image_attachment],
+            )
+
+        self.assertEqual(result["reply"], "Dış model yanıtı")
+        self.assertEqual(result["analyzed_by"], "vision/test-model")
+        mock_llm.assert_called_once()
+        call = mock_llm.call_args.kwargs
+        self.assertEqual(call["model"], "vision/test-model")
+        self.assertEqual(call["temperature"], 0)
+        image_part = call["messages"][1]["content"][1]
+        self.assertEqual(
+            image_part,
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": "data:image/png;base64,aW1hZ2UtYnl0ZXM="
+                },
+            },
+        )
+
+    def test_enabled_vision_call_exception_falls_back_to_pil(self):
+        from agent_app.chat_media import maybe_handle_chat_vision_analysis
+
+        with override_settings(VISION_LLM_ENABLED=True, **self.configured_vision), \
+             patch("agent_app.views.llm_create_vision", side_effect=RuntimeError("404 model not found")), \
+             patch("agent_app.chat_media._attachment_image_bytes", return_value=b"image-bytes"), \
+             patch("agent_app.chat_media._pil_summary_for_attachment", return_value="yerel özet"):
+            result = maybe_handle_chat_vision_analysis(
+                None,
+                None,
+                "bu fotoğrafı analiz et",
+                saved_attachments=[self.image_attachment],
+            )
+
+        self.assertEqual(
+            result["reply"],
+            "(Dış vision hizmetine bağlanılamadı, yerel analizle devam ediliyor: yerel özet)",
+        )
+        self.assertEqual(result["analyzed_by"], "pil-local")
+
+    def test_enabled_vision_empty_response_falls_back_to_pil(self):
+        from agent_app.chat_media import maybe_handle_chat_vision_analysis
+
+        with override_settings(VISION_LLM_ENABLED=True, **self.configured_vision), \
+             patch("agent_app.views.llm_create_vision", return_value=self._response("   ")), \
+             patch("agent_app.chat_media._attachment_image_bytes", return_value=b"image-bytes"), \
+             patch("agent_app.chat_media._pil_summary_for_attachment", return_value="yerel özet"):
+            result = maybe_handle_chat_vision_analysis(
+                None,
+                None,
+                "bu fotoğrafı analiz et",
+                saved_attachments=[self.image_attachment],
+            )
+
+        self.assertEqual(
+            result["reply"],
+            "(Dış vision hizmetine bağlanılamadı, yerel analizle devam ediliyor: yerel özet)",
+        )
+        self.assertEqual(result["analyzed_by"], "pil-local")

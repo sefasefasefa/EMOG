@@ -2070,6 +2070,33 @@ def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_at
         image_atts = _user_latest_image_atts(user) or _conversation_latest_image_atts(conversation)
     if not image_atts:
         return None
+
+    def _pil_fallback_reply():
+        seen_s = set()
+        summaries = []
+        for attachment in image_atts[:5]:
+            summary = _pil_summary_for_attachment(attachment)
+            if summary and summary not in seen_s:
+                seen_s.add(summary)
+                summaries.append(summary)
+        detail = " | ".join(summaries[:3]) or "Görsel dosyası okunamadı."
+        return f"(Dış vision hizmetine bağlanılamadı, yerel analizle devam ediliyor: {detail})"
+
+    vision_model = str(getattr(settings, "VISION_LLM_MODEL", "") or "")
+    vision_base_url = str(getattr(settings, "VISION_LLM_BASE_URL", "") or "")
+    vision_api_key = str(getattr(settings, "VISION_LLM_API_KEY", "") or "")
+    if not vision_model or not vision_base_url or not vision_api_key:
+        attachments = [a for a in image_atts[:5] if isinstance(a, dict)]
+        return {
+            "ok": True,
+            "intent": "chat",
+            "reply": _pil_fallback_reply(),
+            "attachments": attachments,
+            "media": attachments,
+            "analyzed_by": "pil-local",
+            "analyzed_count": len(attachments),
+        }
+
     if not any(k in norm for k in ("analiz", "incele", "tara", "ne gore", "bak")):
         return None
 
@@ -2099,36 +2126,17 @@ def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_at
     ]
 
     from agent_app import views as _v
-    reply = ""
-    used_model = ""
-    seen = set()
-    vision_models = [str(m) for m in (getattr(settings, "NVIDIA_VISION_MODELS", None) or [getattr(settings, "NVIDIA_VISION_MODEL", "")])]
-    for model in vision_models:
-        if not model or model in seen:
-            continue
-        seen.add(model)
-        try:
-            resp = _v.llm_create_vision(messages=messages, model=model, temperature=0)
-            text = (resp.choices[0].message.content or "").strip()
-            if text:
-                reply = text
-                used_model = model
-                break
-        except Exception:
-            continue
-
-    if not reply:
-        seen_s = set()
-        summaries = []
-        for a in image_atts[:5]:
-            s = _pil_summary_for_attachment(a)
-            if s and s not in seen_s:
-                seen_s.add(s)
-                summaries.append(s)
-        if summaries:
-            reply = "Fotoğraf analizi (PIL, teknik özet): " + " | ".join(summaries[:3])
-        else:
-            reply = "Fotoğraf analiz edebilmemize yardımcı olabilecek bir dosya olmadı — lütfen fotoğrafı tekrar paylaşın."
+    try:
+        resp = _v.llm_create_vision(messages=messages, model=vision_model, temperature=0)
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            raise ValueError("empty response from vision model")
+    except Exception:
+        reply = _pil_fallback_reply()
+        used_model = "pil-local"
+    else:
+        reply = text
+        used_model = vision_model
 
     attachments = [a for a in image_atts[:5] if isinstance(a, dict)]
     return {
