@@ -1,0 +1,90 @@
+{% extends "agent_app/base.html" %}
+
+{% block title %}Özellik Anahtarları | EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .admin-page{display:flex;flex-direction:column;gap:24px;max-width:1100px;margin:0 auto}
+  .admin-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .admin-page-header h1{margin:0;font-size:1.75rem;letter-spacing:-.02em}
+  .admin-page-header p{margin:6px 0 0;color:var(--fg-muted)}
+  .admin-eyebrow{margin:0 0 6px!important;color:var(--accent)!important;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+  .admin-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .admin-error{padding:12px 16px;border:1px solid var(--error);background:var(--error-bg);color:var(--fg);border-radius:var(--radius-md)}
+  .admin-empty{padding:48px 20px;text-align:center;color:var(--fg-muted)}
+  .admin-toggle-name{font-family:var(--font-mono);font-weight:600}
+  .admin-description{color:var(--fg-muted);max-width:480px}
+  .admin-form{display:inline-flex;margin:0}
+  .admin-form .btn{white-space:nowrap}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <header class="admin-page-header">
+    <div>
+      <p class="admin-eyebrow">Yerel Yönetim</p>
+      <h1>Özellik Anahtarları</h1>
+      <p>Feature toggle kayıtlarını görüntüleyin ve durumlarını değiştirin.</p>
+    </div>
+    <div class="admin-actions">
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_dashboard' %}">Panele Dön</a>
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_toggle_maintenance' %}">Bakım Modu</a>
+    </div>
+  </header>
+
+  {% if error %}
+  <div class="admin-error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Tüm Özellikler</h2>
+        <p class="card-subtitle">{{ toggles|length }} özellik kaydı</p>
+      </div>
+    </div>
+    {% if toggles %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Özellik</th>
+            <th>Açıklama</th>
+            <th>Durum</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for toggle in toggles %}
+          <tr>
+            <td class="admin-toggle-name">{{ toggle.name }}</td>
+            <td class="admin-description">{{ toggle.description|default:"—" }}</td>
+            <td>
+              {% if toggle.is_active %}
+                <span class="badge badge-success">Aktif</span>
+              {% else %}
+                <span class="badge badge-neutral">Pasif</span>
+              {% endif %}
+            </td>
+            <td>
+              <form class="admin-form" method="post" action="{% url 'admin_feature_toggles' %}">
+                {% csrf_token %}
+                <input type="hidden" name="name" value="{{ toggle.name }}">
+                <input type="hidden" name="is_active" value="{% if toggle.is_active %}false{% else %}true{% endif %}">
+                <button class="btn {% if toggle.is_active %}btn-secondary{% else %}btn-primary{% endif %} btn-sm" type="submit">
+                  {% if toggle.is_active %}Pasifleştir{% else %}Aktifleştir{% endif %}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="admin-empty">Henüz özellik anahtarı tanımlanmamış.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

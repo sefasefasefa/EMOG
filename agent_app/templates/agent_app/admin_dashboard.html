@@ -1,0 +1,141 @@
+{% extends "agent_app/base.html" %}
+
+{% block title %}Admin Paneli | EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .admin-page{display:flex;flex-direction:column;gap:24px;max-width:1200px;margin:0 auto}
+  .admin-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .admin-page-header h1{margin:0;font-size:1.75rem;letter-spacing:-.02em}
+  .admin-page-header p{margin:6px 0 0;color:var(--fg-muted)}
+  .admin-eyebrow{margin:0 0 6px!important;color:var(--accent)!important;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+  .admin-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+  .admin-stat{padding:20px}
+  .admin-stat-label{margin:0;color:var(--fg-muted);font-size:13px}
+  .admin-stat-value{margin:6px 0 0;font-size:2rem;font-weight:700;line-height:1.1}
+  .admin-stat-note{margin:8px 0 0;color:var(--fg-subtle);font-size:12px}
+  .admin-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:20px;align-items:start}
+  .admin-card-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .admin-card-header h2{margin:0;font-size:1rem}
+  .admin-empty{padding:36px 20px;text-align:center;color:var(--fg-muted)}
+  .admin-toggle-list{list-style:none;margin:0;padding:0}
+  .admin-toggle-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 20px;border-bottom:1px solid var(--border)}
+  .admin-toggle-list li:last-child{border-bottom:0}
+  .admin-toggle-name{font-weight:600}
+  .admin-toggle-description{color:var(--fg-muted);font-size:12px;margin-top:2px}
+  @media(max-width:900px){.admin-dashboard-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <header class="admin-page-header">
+    <div>
+      <p class="admin-eyebrow">Yerel Yönetim</p>
+      <h1>Admin Paneli</h1>
+      <p>Sistem durumunu, özellik anahtarlarını ve yönetici işlemlerini izleyin.</p>
+    </div>
+    <div class="admin-actions">
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_feature_toggles' %}">Özellikler</a>
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_toggle_maintenance' %}">Bakım Modu</a>
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_system_logs' %}">Sistem Kayıtları</a>
+    </div>
+  </header>
+
+  <section class="admin-stats" aria-label="Sistem istatistikleri">
+    <article class="card admin-stat">
+      <p class="admin-stat-label">Kullanıcılar</p>
+      <p class="admin-stat-value">{{ stats.user_count }}</p>
+      <p class="admin-stat-note">Toplam uygulama hesabı</p>
+    </article>
+    <article class="card admin-stat">
+      <p class="admin-stat-label">Sohbetler</p>
+      <p class="admin-stat-value">{{ stats.conversation_count }}</p>
+      <p class="admin-stat-note">Toplam konuşma</p>
+    </article>
+    <article class="card admin-stat">
+      <p class="admin-stat-label">Medya İşleri</p>
+      <p class="admin-stat-value">{{ stats.media_job_count }}</p>
+      <p class="admin-stat-note">Video ve görsel işleri</p>
+    </article>
+    <article class="card admin-stat">
+      <p class="admin-stat-label">Aktif Özellikler</p>
+      <p class="admin-stat-value">{{ stats.active_toggles_count }}</p>
+      <p class="admin-stat-note">Etkin feature toggle</p>
+    </article>
+    <article class="card admin-stat">
+      <p class="admin-stat-label">Bakım Modu</p>
+      <p class="admin-stat-value">
+        {% if stats.maintenance_mode %}
+          <span class="badge badge-warning">Aktif</span>
+        {% else %}
+          <span class="badge badge-success">Kapalı</span>
+        {% endif %}
+      </p>
+      <p class="admin-stat-note">{% if stats.maintenance_mode %}Sistem bakımda{% else %}Sistem normal çalışıyor{% endif %}</p>
+    </article>
+  </section>
+
+  <div class="admin-dashboard-grid">
+    <section class="card">
+      <div class="admin-card-header">
+        <h2>Son Yönetici İşlemleri</h2>
+        <a class="btn btn-ghost btn-sm" href="{% url 'admin_system_logs' %}">Tüm Kayıtlar</a>
+      </div>
+      {% if recent_logs %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Yönetici</th>
+              <th>İşlem</th>
+              <th>Hedef</th>
+              <th>Zaman</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in recent_logs %}
+            <tr>
+              <td>{% if log.admin_user %}{{ log.admin_user.get_username }}{% else %}—{% endif %}</td>
+              <td><span class="badge badge-info">{{ log.action }}</span></td>
+              <td>{{ log.target|default:"—" }}</td>
+              <td>{{ log.timestamp|date:"Y-m-d H:i" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="admin-empty">Henüz yönetici işlemi kaydedilmedi.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="admin-card-header">
+        <h2>Özellik Anahtarları</h2>
+        <a class="btn btn-ghost btn-sm" href="{% url 'admin_feature_toggles' %}">Yönet</a>
+      </div>
+      {% if toggles %}
+      <ul class="admin-toggle-list">
+        {% for toggle in toggles %}
+        <li>
+          <div>
+            <div class="admin-toggle-name">{{ toggle.name }}</div>
+            {% if toggle.description %}<div class="admin-toggle-description">{{ toggle.description }}</div>{% endif %}
+          </div>
+          {% if toggle.is_active %}
+            <span class="badge badge-success">Aktif</span>
+          {% else %}
+            <span class="badge badge-neutral">Pasif</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="admin-empty">Henüz özellik anahtarı tanımlanmamış.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

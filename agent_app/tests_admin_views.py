@@ -39,6 +39,26 @@ class AdminViewTests(TestCase):
         self.assertEqual(reverse("admin_toggle_maintenance"), "/emog-admin/maintenance/")
         self.assertEqual(reverse("admin_system_logs"), "/emog-admin/logs/")
 
+    def test_admin_nav_link_is_visible_only_for_privileged_users(self):
+        response = self.client.get(reverse("pricing"))
+        self.assertContains(response, 'id="local-admin-btn"')
+
+        self.client.logout()
+        self.client.force_login(self.regular_user)
+        response = self.client.get(reverse("pricing"))
+        self.assertNotContains(response, 'id="local-admin-btn"')
+
+        superuser = get_user_model().objects.create_user(
+            username="panel-superuser",
+            email="panel-superuser@example.com",
+            password="test-password",
+        )
+        get_user_model().objects.filter(pk=superuser.pk).update(is_superuser=True)
+        superuser.refresh_from_db()
+        self.client.force_login(superuser)
+        response = self.client.get(reverse("pricing"))
+        self.assertContains(response, 'id="local-admin-btn"')
+
     def test_non_staff_users_are_forbidden(self):
         self.client.logout()
         self.client.force_login(self.regular_user)
@@ -53,7 +73,7 @@ class AdminViewTests(TestCase):
                 response = self.client.get(reverse(url_name))
                 self.assertEqual(response.status_code, 403)
 
-    def test_dashboard_returns_statistics_and_five_recent_logs(self):
+    def test_dashboard_renders_statistics_ten_recent_logs_and_toggles(self):
         app_user = User.objects.create(
             email="app-user@example.com",
             username="app-user",
@@ -67,7 +87,7 @@ class AdminViewTests(TestCase):
         FeatureToggle.objects.create(name="disabled_feature", is_active=False)
         SystemSetting.objects.create(key="maintenance_mode", value="true")
 
-        for index in range(6):
+        for index in range(12):
             AdminAuditLog.objects.create(
                 admin_user=self.staff,
                 action="test_action",
@@ -77,21 +97,19 @@ class AdminViewTests(TestCase):
         response = self.client.get(reverse("admin_dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        if response["Content-Type"].startswith("application/json"):
-            payload = response.json()
-            stats = payload["stats"]
-            self.assertEqual(stats["total_users"], 2)
-            self.assertEqual(stats["total_conversations"], 1)
-            self.assertEqual(stats["total_video_jobs"], 1)
-            self.assertEqual(stats["total_image_jobs"], 2)
-            self.assertEqual(stats["total_jobs"], 3)
-            self.assertEqual(stats["active_feature_toggles"], 1)
-            self.assertTrue(stats["maintenance_mode"])
-            self.assertEqual(len(payload["recent_logs"]), 5)
-        else:
-            self.assertContains(response, "active_feature", status_code=200)
+        self.assertTemplateUsed(response, "agent_app/admin_dashboard.html")
+        stats = response.context["stats"]
+        self.assertEqual(stats["user_count"], 2)
+        self.assertEqual(stats["conversation_count"], 1)
+        self.assertEqual(stats["media_job_count"], 3)
+        self.assertEqual(stats["active_toggles_count"], 1)
+        self.assertTrue(stats["maintenance_mode"])
+        self.assertEqual(len(response.context["recent_logs"]), 10)
+        self.assertEqual(len(response.context["toggles"]), 2)
+        self.assertContains(response, "active_feature")
+        self.assertContains(response, "Bakım Modu")
 
-    def test_feature_toggles_get_lists_all_toggles(self):
+    def test_feature_toggles_get_renders_all_toggles(self):
         FeatureToggle.objects.create(
             name="vision",
             is_active=True,
@@ -102,13 +120,17 @@ class AdminViewTests(TestCase):
         response = self.client.get(reverse("admin_feature_toggles"))
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(len(payload["toggles"]), 2)
-        self.assertEqual(payload["toggles"][0]["name"], "legacy")
-        self.assertEqual(payload["toggles"][1]["name"], "vision")
-        self.assertEqual(payload["toggles"][1]["description"], "Vision analysis")
+        self.assertTemplateUsed(response, "agent_app/admin_toggles.html")
+        toggles = response.context["toggles"]
+        self.assertEqual(len(toggles), 2)
+        self.assertEqual(toggles[0].name, "legacy")
+        self.assertEqual(toggles[1].name, "vision")
+        self.assertEqual(toggles[1].description, "Vision analysis")
+        self.assertContains(response, "Vision analysis")
+        self.assertContains(response, "Aktif")
+        self.assertContains(response, "Pasif")
 
-    def test_feature_toggle_post_updates_toggle_and_writes_audit_log(self):
+    def test_feature_toggle_post_updates_toggle_redirects_and_writes_audit_log(self):
         toggle = FeatureToggle.objects.create(name="vision", is_active=False)
 
         response = self.client.post(
@@ -117,7 +139,11 @@ class AdminViewTests(TestCase):
             REMOTE_ADDR="10.0.0.5",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response,
+            reverse("admin_feature_toggles"),
+            fetch_redirect_response=False,
+        )
         toggle.refresh_from_db()
         self.assertTrue(toggle.is_active)
         audit_log = AdminAuditLog.objects.get()
@@ -135,17 +161,29 @@ class AdminViewTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertFalse(AdminAuditLog.objects.exists())
 
-    def test_maintenance_post_updates_setting_and_writes_audit_log(self):
-        response = self.client.get(reverse("admin_toggle_maintenance"))
-        self.assertEqual(response.status_code, 405)
+    def test_maintenance_page_renders_status_and_form(self):
+        SystemSetting.objects.create(key="maintenance_mode", value="true")
 
+        response = self.client.get(reverse("admin_toggle_maintenance"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "agent_app/admin_maintenance.html")
+        self.assertTrue(response.context["maintenance_mode"])
+        self.assertContains(response, "Bakım Modu")
+        self.assertContains(response, "Kapat")
+
+    def test_maintenance_post_updates_setting_redirects_and_writes_audit_log(self):
         response = self.client.post(
             reverse("admin_toggle_maintenance"),
             {"enabled": "true"},
             REMOTE_ADDR="10.0.0.6",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response,
+            reverse("admin_dashboard"),
+            fetch_redirect_response=False,
+        )
         setting = SystemSetting.objects.get(key="maintenance_mode")
         self.assertEqual(setting.value, "true")
         audit_log = AdminAuditLog.objects.get()
@@ -154,7 +192,7 @@ class AdminViewTests(TestCase):
         self.assertEqual(audit_log.target, "maintenance_mode")
         self.assertEqual(audit_log.ip, "10.0.0.6")
 
-    def test_system_logs_returns_only_the_latest_fifty_entries(self):
+    def test_system_logs_renders_only_the_latest_fifty_entries(self):
         for index in range(55):
             AdminAuditLog.objects.create(
                 admin_user=self.staff,
@@ -166,12 +204,15 @@ class AdminViewTests(TestCase):
         response = self.client.get(reverse("admin_system_logs"))
 
         self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(len(payload["logs"]), 50)
-        self.assertEqual(payload["logs"][0]["admin_user"], self.staff.username)
-        self.assertEqual(payload["logs"][0]["action"], "test_action")
-        self.assertEqual(payload["logs"][0]["ip"], "127.0.0.1")
-        self.assertIn("timestamp", payload["logs"][0])
+        self.assertTemplateUsed(response, "agent_app/admin_logs.html")
+        logs = response.context["logs"]
+        self.assertEqual(len(logs), 50)
+        self.assertEqual(logs[0].admin_user.username, self.staff.username)
+        self.assertEqual(logs[0].action, "test_action")
+        self.assertEqual(logs[0].ip, "127.0.0.1")
+        self.assertContains(response, self.staff.username)
+        self.assertContains(response, "test_action")
+        self.assertContains(response, "127.0.0.1")
 
 
 class AdminCsrfTests(TestCase):
@@ -212,5 +253,9 @@ class AdminCsrfTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertRedirects(
+            response,
+            reverse("admin_feature_toggles"),
+            fetch_redirect_response=False,
+        )
         self.assertTrue(FeatureToggle.objects.get(name="vision").is_active)

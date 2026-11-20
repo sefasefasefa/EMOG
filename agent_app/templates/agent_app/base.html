@@ -349,6 +349,14 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
           <span>Admin</span>
         </a>
+        {% if user.is_authenticated %}
+        {% if user.is_staff or user.is_superuser %}
+        <a href="{% url 'admin_dashboard' %}" id="local-admin-btn" class="btn btn-secondary btn-sm" style="align-items:center;gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+          <span>Admin Paneli</span>
+        </a>
+        {% endif %}
+        {% endif %}
         <div id="user-menu" class="dropdown" style="display:none;">
           <button class="dropdown-trigger btn btn-ghost" style="padding:8px 12px;display:flex;align-items:center;gap:8px;" aria-expanded="false" aria-haspopup="true">
             <img id="user-avatar" src="" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">

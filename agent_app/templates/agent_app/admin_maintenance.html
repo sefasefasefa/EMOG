@@ -1,0 +1,73 @@
+{% extends "agent_app/base.html" %}
+
+{% block title %}Bakım Modu | EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .admin-page{display:flex;flex-direction:column;gap:24px;max-width:820px;margin:0 auto}
+  .admin-page-header h1{margin:0;font-size:1.75rem;letter-spacing:-.02em}
+  .admin-page-header p{margin:6px 0 0;color:var(--fg-muted)}
+  .admin-eyebrow{margin:0 0 6px!important;color:var(--accent)!important;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+  .admin-actions{display:flex;gap:10px;flex-wrap:wrap}
+  .admin-status{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px}
+  .admin-status h2{margin:0 0 4px;font-size:1.05rem}
+  .admin-status p{margin:0;color:var(--fg-muted)}
+  .admin-control{padding:24px}
+  .admin-control h2{margin:0 0 8px;font-size:1.05rem}
+  .admin-control>p{margin:0 0 18px;color:var(--fg-muted)}
+  .admin-control-actions{display:flex;gap:12px;flex-wrap:wrap}
+  .admin-form{margin:0}
+  .admin-error{padding:12px 16px;border:1px solid var(--error);background:var(--error-bg);border-radius:var(--radius-md)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <header class="admin-page-header">
+    <div>
+      <p class="admin-eyebrow">Yerel Yönetim</p>
+      <h1>Bakım Modu</h1>
+      <p>Uygulamanın bakım durumunu güvenli biçimde açın veya kapatın.</p>
+    </div>
+    <div class="admin-actions">
+      <a class="btn btn-secondary btn-sm" href="{% url 'admin_dashboard' %}">Panele Dön</a>
+    </div>
+  </header>
+
+  {% if error %}
+  <div class="admin-error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <section class="card admin-status">
+    <div>
+      <h2>Bakım Modu Durumu</h2>
+      <p>{% if maintenance_mode %}Sistem şu anda bakım modunda.{% else %}Sistem normal kullanıma açık.{% endif %}</p>
+    </div>
+    {% if maintenance_mode %}
+      <span class="badge badge-warning">Aktif</span>
+    {% else %}
+      <span class="badge badge-success">Kapalı</span>
+    {% endif %}
+  </section>
+
+  <section class="card admin-control">
+    <h2>Durumu Değiştir</h2>
+    <p>Değişiklikler yönetici işlem kayıtlarına otomatik olarak eklenir.</p>
+    <div class="admin-control-actions">
+      {% if maintenance_mode %}
+      <form class="admin-form" method="post" action="{% url 'admin_toggle_maintenance' %}">
+        {% csrf_token %}
+        <input type="hidden" name="enabled" value="false">
+        <button class="btn btn-secondary" type="submit">Bakım Modunu Kapat</button>
+      </form>
+      {% else %}
+      <form class="admin-form" method="post" action="{% url 'admin_toggle_maintenance' %}">
+        {% csrf_token %}
+        <input type="hidden" name="enabled" value="true">
+        <button class="btn btn-danger" type="submit">Bakım Modunu Aç</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}
