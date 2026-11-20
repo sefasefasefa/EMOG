@@ -877,6 +877,22 @@ def llm_create(**kwargs):
     raise last_error
 
 
+def llm_create_vision(messages, model=None, **kwargs):
+    """Vision-kapable modelden bir cagri — content bicimi OpenAI multimodal (list of parts)."""
+    kwargs.setdefault("max_tokens", 900)
+    payload = dict(kwargs)
+    payload["model"] = model or getattr(settings, "NVIDIA_VISION_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b")
+    payload["messages"] = messages
+    payload["reasoning_effort"] = "none"
+    try:
+        return client.chat.completions.create(**payload)
+    except Exception as exc:
+        if "reasoning_effort" in str(exc).lower():
+            payload.pop("reasoning_effort", None)
+            return client.chat.completions.create(**payload)
+        raise
+
+
 def _is_network_error(exc):
     """TLS/timeout/connection hatasi -> endpoint degistirilebilir."""
     msg = str(exc).lower()
@@ -2375,6 +2391,27 @@ def assistant_message(request):
     except Exception as exc:
         logger.warning("chat generation handling error: %s", exc)
 
+    # Vision analizi: kullanici fotoğraf/resim eki + analiz-like talep -> vision LLM ile imajı oku, chat yanıtında analizi açikla.
+    try:
+        from agent_app import chat_media as chat_media_mod
+        vision_resp = chat_media_mod.maybe_handle_chat_vision_analysis(conversation, user, raw_message, saved_chat_attachments)
+        if vision_resp:
+            reply_text = str(vision_resp.get("reply") or "")
+            media_atts = vision_resp.get("attachments") or []
+            assistant_meta = {"attachments": media_atts} if media_atts else None
+            _append_chat_message(conversation, "assistant", reply_text, meta_data=assistant_meta)
+            _remember_conversation(conversation, last_intent="chat", last_topic=(raw_message or "")[:1000])
+            return JsonResponse({
+                "ok": True,
+                "intent": "chat",
+                "reply": reply_text,
+                "attachments": media_atts or saved_chat_attachments,
+                "media": media_atts,
+                "conversation_id": str(conversation.id),
+            })
+    except Exception as exc:
+        logger.warning("chat vision analysis error: %s", exc)
+
     # "devam et" / "continue" gibi kisa mesajlar: niyet router'a gitmeden once
     # yarim kalmis/başarisiz son gorevi bul ve ayni projede yeniden baslat.
     continuation_request = _is_continuation_message(raw_message) if 'raw_message' in locals() else _is_continuation_message(message)
@@ -2464,11 +2501,15 @@ def assistant_message(request):
 
     system_prompt = """You are EMOG's intent router. Read the user's Turkish or English message and return ONLY valid JSON.
 Choose exactly one intent:
-- chat: the user wants an explanation, answer, brainstorming, or conversation. Put a concise helpful answer in message.
-- build: the user asks for a COMPLETE NEW product/app/site/game/system/platform to be created.
+- chat: the user wants an explanation, answer, brainstorming, or conversation, or suggestions (e.g. username ideas). Put a concise helpful answer in message.
+  Examples: "bana username öner", "kullanıcı adı öner", "isimime göre username öner",
+  "nasıl çalışır?", "hakkında bilgi ver".
+- build: the user asks for a COMPLETE NEW product/app/site/game/system/platform or creative content to be created.
   Examples: "haber sitesi yap", "bana bir e-ticaret sitesi kur", "3d oyun yap",
   "androidde çalışan bir forum sistemi yap", "sosyal medya uygulaması geliştir",
-  "yönetim paneli oluştur", "sağlık takip uygulaması yap", "bir SaaS platformu kur".
+  "yönetim paneli oluştur", "sağlık takip uygulaması yap", "bir SaaS platformu kur",
+  "bir şarkı sözü yaz", "şiir yaz", "kısa bir hikaye yaz", "senaryo hazırla",
+  "kullanıcı için bir logo tasarla".
   Put the full request in task.
 - execute: the user asks EMOG to modify, fix, test, explain or run EXISTING code — a NARROW job
   on an already existing project. Examples: "bu fonksiyonda hata var düzelt", "testleri çalıştır",
