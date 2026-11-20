@@ -1980,7 +1980,7 @@ def _user_latest_image_atts(user, limit=5):
         return []
 
 
-def _pil_summary_for_attachment(att):
+def _pil_summary_for_attachment(att) -> str:
     """Vision model yoksa deterministik, ayrıntılı PIL analizi özeti."""
     import io
     import math
@@ -2126,7 +2126,7 @@ def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_at
                 seen_s.add(s)
                 summaries.append(s)
         if summaries:
-            reply = "Fotoğraf analizi (PIL): " + " | ".join(summaries[:3])
+            reply = "Fotoğraf analizi (PIL, teknik özet): " + " | ".join(summaries[:3])
         else:
             reply = "Fotoğraf analiz edebilmemize yardımcı olabilecek bir dosya olmadı — lütfen fotoğrafı tekrar paylaşın."
 
