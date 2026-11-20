@@ -74,7 +74,7 @@ else:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'rodonsoft.me', 'www.rodonsoft.me', '.rodonsoft.me']
 
 # Multi-tenant mode: per-user sandbox containers (requires Docker)
 EMOG_MULTI_TENANT = os.getenv('EMOG_MULTI_TENANT', 'false').lower() in ('true', '1', 'yes')
@@ -292,8 +292,8 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'EMOG <noreply@emog.local>')
 
 # Frontend URL for email verification links
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8002')
-CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8002', 'http://localhost:8002']
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://rodonsoft.me')
+CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8002', 'http://localhost:8002', 'https://rodonsoft.me', 'https://www.rodonsoft.me']
 
 # Canlı preview testi (Playwright) için yerel kimlik doğrulama token'ı.
 # Sadece aynı süreçte çalışan QA tarayıcısı bu header'ı gönderir; preview
@@ -419,6 +419,15 @@ NVIDIA_TASK_MODELS = {
 
 # Niyet siniflandirmasi icin ayni hizli model
 NVIDIA_INTENT_MODEL = os.environ.get("NVIDIA_INTENT_MODEL", NVIDIA_TASK_MODELS.get("default"))
+
+# Vision (imaj) analizi icin model adaylari. Siralanarak denenir; 404/429 donenler sonrakiye geçilir.
+NVIDIA_VISION_MODEL = os.environ.get("NVIDIA_VISION_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b")
+NVIDIA_VISION_MODELS = [
+    NVIDIA_VISION_MODEL,
+    "nvidia/nemotron-3-nano-vl-20b",
+    "nvidia/nemotron-3-vl-20b",
+    "nvidia/nemotron-3-vl-8b",
+]
 
 # Arayuzde gosterilecek amac gruplari (etiket -> ayar anahtari)
 NVIDIA_TASK_LABELS = {
