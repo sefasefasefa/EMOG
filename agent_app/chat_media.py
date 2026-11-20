@@ -1919,3 +1919,224 @@ def try_handle_pending_action(conversation, user, reply_text):
         "pending_jobs": exec_result.get("pending_jobs") or [],
         "media": exec_result.get("media") or exec_result.get("attachments") or [],
     }
+
+
+# ---------------------------------------------------------------------------
+# Vision analizi: kullanici fotoğraf/resim eki + "analiz"-like mesajla
+# ---------------------------------------------------------------------------
+
+def _attachment_image_bytes(att):
+    """ChatAttachment'dan ham imaj bayt'larını media dizininden okur."""
+    from agent_app.models import ChatAttachment
+    try:
+        att_obj = ChatAttachment.objects.filter(id=att.get("id")).first()
+    except Exception:
+        return None
+    if att_obj is None:
+        return None
+    try:
+        path = _safe_media_path(att_obj.file)
+        if path and path.is_file():
+            return path.read_bytes()
+        with att_obj.file.open("rb") as fh:
+            return fh.read()
+    except Exception:
+        return None
+
+
+def _conversation_latest_image_atts(conversation, limit=5):
+    """Sohbet geçmişindeki en son imaj eklerini döner (meta_data'tan)."""
+    out = []
+    if conversation is None:
+        return out
+    try:
+        nodes = conversation.nodes.order_by("-timestamp")[:80]
+    except Exception:
+        return out
+    for node in nodes:
+        meta = getattr(node, "meta_data", None) or {}
+        atts = meta.get("attachments") or []
+        for att in atts:
+            if isinstance(att, dict) and att.get("kind") == "image" and att.get("id"):
+                out.append(att)
+                if len(out) >= limit:
+                    return out
+    return out
+
+
+def _user_latest_image_atts(user, limit=5):
+    """Kullanicinin eklerindeki (sohbetlerindeki) en son imaj eklerini döner."""
+    if user is None:
+        return []
+    try:
+        from agent_app.models import ChatAttachment
+        out = []
+        for a in ChatAttachment.objects.filter(user=user, kind="image").order_by("-created_at")[:limit]:
+            d = attachment_to_dict(a)
+            if d.get("kind") == "image" and d.get("id"):
+                out.append(d)
+        return out
+    except Exception:
+        return []
+
+
+def _pil_summary_for_attachment(att):
+    """Vision model yoksa deterministik, ayrıntılı PIL analizi özeti."""
+    import io
+    import math
+    try:
+        data = _attachment_image_bytes(att)
+        if not data:
+            return ""
+        from collections import Counter
+        from PIL import Image, ImageStat
+
+        with Image.open(io.BytesIO(data)) as source:
+            source.load()
+            fmt = source.format or "?"
+            mode = source.mode or "?"
+            w, h = source.size
+            rgb_image = source.convert("RGB")
+            grayscale = source.convert("L")
+
+        total = w * h or 1
+        raw_rgb = rgb_image.tobytes()
+        counts = Counter(zip(raw_rgb[0::3], raw_rgb[1::3], raw_rgb[2::3]))
+        top = counts.most_common(6)
+        colors = ", ".join(
+            f"rgb({red},{green},{blue}):{count * 100 // total}%"
+            for (red, green, blue), count in top
+        )
+        brightness = round(ImageStat.Stat(grayscale).mean[0])
+        colorfulness = (
+            "renkli"
+            if any(red != green or green != blue for (red, green, blue) in counts)
+            else "siyah-beyaz/gri-ton"
+        )
+        divisor = math.gcd(w, h) or 1
+        aspect_ratio = f"{w // divisor}:{h // divisor}"
+        if w > h:
+            orientation = "geniş (yatay)"
+        elif h > w:
+            orientation = "yüksek (dikey)"
+        else:
+            orientation = "kare"
+
+        return (
+            f"{fmt}, {w}x{h} px ({total} piksel), {mode} modu, {len(data)} bayt. "
+            f"En-boy oranı: {aspect_ratio} ({w / h:.2f}), yön: {orientation}. "
+            f"Ortalama parlaklık: {brightness}/255. "
+            f"Renklilik: {colorfulness}. "
+            f"Baskın renkler: {colors}."
+        )
+    except Exception:
+        return ""
+
+
+def maybe_handle_chat_vision_analysis(conversation, user, message: str, saved_attachments=None):
+    # External vision API disabled by default: serve local PIL analysis only
+    # (no server load, no external call).
+    if not getattr(settings, "VISION_LLM_ENABLED", False):
+        image_atts = [
+            a for a in (saved_attachments or [])
+            if isinstance(a, dict) and a.get("kind") == "image" and a.get("id")
+        ]
+        if not image_atts and user is not None:
+            image_atts = _user_latest_image_atts(user) or _conversation_latest_image_atts(conversation)
+        att = image_atts[0] if image_atts else None
+        summary = _pil_summary_for_attachment(att) if att else "Görsel dosyası okunamadı."
+        return {
+            "ok": True,
+            "intent": "chat",
+            "reply": f"Görsel analizi (yerel PIL, dış API kapalı): {summary}",
+            "attachments": image_atts,
+            "media": image_atts,
+            "analyzed_by": "pil-local",
+            "analyzed_count": len(image_atts),
+        }
+    """
+    Kullanici 'bu fotoğrafı analiz et' gibi bir talep + imaj eki ile sohbet ettiğinde:
+    Vision destekli LLM ile eki oku ve chat yanıtında analizini açikla.
+
+    Returns: {"ok": True, "reply": str, "attachments": [...], "intent": "chat"} or None.
+    """
+    norm = _norm_text(message or "")
+    image_atts = [
+        a for a in (saved_attachments or [])
+        if isinstance(a, dict) and a.get("kind") == "image" and a.get("id")
+    ]
+    if not image_atts and user is not None:
+        # Kullanici yeni mesajda yeniden eklemediyse, kullanicinin son eklerindeki en son imajı kullan.
+        image_atts = _user_latest_image_atts(user) or _conversation_latest_image_atts(conversation)
+    if not image_atts:
+        return None
+    if not any(k in norm for k in ("analiz", "incele", "tara", "ne gore", "bak")):
+        return None
+
+    parts = [{"type": "text", "text": ((message or "").strip() or "Bu fotoğrafı analiz et.")[:2000]}]
+    n_images = 0
+    for a in image_atts[:5]:
+        data = _attachment_image_bytes(a)
+        if not data:
+            continue
+        import base64 as _b64
+        b64 = _b64.b64encode(data).decode("ascii")
+        mime = str(a.get("mime") or "image/png").split(";")[0] or "image/png"
+        parts.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
+        n_images += 1
+    if n_images == 0:
+        return None
+
+    system = (
+        "You analyze user-provided images. Describe the image content concisely and factually: "
+        "the main subject, visible text/OCR if any, colors/style, and any notable issues or errors. "
+        "If the image shows a specific error message (e.g., SSL/certificate errors), quote it. "
+        "Reply in Turkish. Do not refuse."
+    )
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": parts},
+    ]
+
+    from agent_app import views as _v
+    reply = ""
+    used_model = ""
+    seen = set()
+    vision_models = [str(m) for m in (getattr(settings, "NVIDIA_VISION_MODELS", None) or [getattr(settings, "NVIDIA_VISION_MODEL", "")])]
+    for model in vision_models:
+        if not model or model in seen:
+            continue
+        seen.add(model)
+        try:
+            resp = _v.llm_create_vision(messages=messages, model=model, temperature=0)
+            text = (resp.choices[0].message.content or "").strip()
+            if text:
+                reply = text
+                used_model = model
+                break
+        except Exception:
+            continue
+
+    if not reply:
+        seen_s = set()
+        summaries = []
+        for a in image_atts[:5]:
+            s = _pil_summary_for_attachment(a)
+            if s and s not in seen_s:
+                seen_s.add(s)
+                summaries.append(s)
+        if summaries:
+            reply = "Fotoğraf analizi (PIL): " + " | ".join(summaries[:3])
+        else:
+            reply = "Fotoğraf analiz edebilmemize yardımcı olabilecek bir dosya olmadı — lütfen fotoğrafı tekrar paylaşın."
+
+    attachments = [a for a in image_atts[:5] if isinstance(a, dict)]
+    return {
+        "ok": True,
+        "intent": "chat",
+        "reply": reply,
+        "attachments": attachments,
+        "media": attachments,
+        "analyzed_by": used_model,
+        "analyzed_count": n_images,
+    }

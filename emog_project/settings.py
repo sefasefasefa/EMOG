@@ -295,6 +295,11 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'EMOG <noreply@emog.local>'
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'https://rodonsoft.me')
 CSRF_TRUSTED_ORIGINS = ['http://127.0.0.1:8002', 'http://localhost:8002', 'https://rodonsoft.me', 'https://www.rodonsoft.me']
 
+# Vision (image understanding) external API flag.
+# Default False: no external vision API call is made — image analysis runs locally
+# via Pillow (PIL) only, so the server takes no extra load.
+VISION_LLM_ENABLED = os.getenv("VISION_LLM_ENABLED", "false").lower() in ("true", "1", "yes")
+
 # Canlı preview testi (Playwright) için yerel kimlik doğrulama token'ı.
 # Sadece aynı süreçte çalışan QA tarayıcısı bu header'ı gönderir; preview
 # dosyaları normal kullanıcılar için oturum korumasında kalır.
