@@ -69,8 +69,11 @@ elif command -v lsof >/dev/null 2>&1; then
         echo "$OLD_PIDS" | xargs -r kill -9 2>/dev/null || true
     fi
 fi
-# Port dinleyen bulunamadiysa / ek olarak waitress+emog process'lerini temizle.
-if command -v pgrep >/dev/null 2>&1; then
+# Waitress+emog proseslerini tamamen kapat (parent+child).
+# Windows/Git Bash'ta pgrep yok; PowerShell kullan.
+if command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command 'Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*emog_project.wsgi*" -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }' >/dev/null 2>&1 || true
+elif command -v pgrep >/dev/null 2>&1; then
     OLD_PIDS=$(pgrep -f "waitress-serve.*emog_project.wsgi:application" 2>/dev/null || true)
     if [ -n "$OLD_PIDS" ]; then
         echo "$OLD_PIDS" | xargs -r kill -9 2>/dev/null || true
