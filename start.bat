@@ -50,4 +50,4 @@ timeout /t 2 /nobreak >nul
 echo Eski process'ler kapatildi.
 
 REM Waitress'i baslat
-uv run waitress-serve --host=0.0.0.0 --port=8002 --threads=%THREADS% emog_project.wsgi:application
+"%~dp0.venv\Scripts\python.exe" -m waitress --host=0.0.0.0 --port=8002 --threads=%THREADS% emog_project.wsgi:application
