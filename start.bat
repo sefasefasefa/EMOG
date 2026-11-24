@@ -46,7 +46,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8002 " ^| findstr LISTENING
 for /f "tokens=1" %%P in ('wmic process where "CommandLine like '%%emog_project.wsgi:application%%'" get ProcessId /value 2^>nul ^| findstr "="') do (
     for /f "tokens=2 delims==" %%Q in ("%%P") do taskkill /PID %%Q /F >nul 2>&1
 )
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 echo Eski process'ler kapatildi.
 
 REM Waitress'i baslat
