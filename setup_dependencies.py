@@ -34,10 +34,28 @@ def check_python_package(import_name: str) -> bool:
         return False
 
 
+MIN_FREE_GB = 2.0
+
+
+def enough_disk_space() -> bool:
+    """Otomatik kurulum disk'i doldurmadan once durdur."""
+    try:
+        free = shutil.disk_usage(Path(__file__).resolve().parent).free
+        return free >= MIN_FREE_GB * (1024 ** 3)
+    except Exception:
+        return True
+
+
 def install_python_package(name: str, use_uv: bool) -> bool:
+    if not enough_disk_space():
+        print("  [SKIP] %s: disk alani yetersiz (<%.1f GB), otomatik kurulum atlandi"
+              % (name, MIN_FREE_GB))
+        return False
     print("Installing Python package: %s ..." % name)
     if use_uv and shutil.which("uv"):
-        cmd = ["uv", "pip", "install", "--system", "--break-system-packages", name]
+        # Aktif Python'a kur (onceki --system global Python'a kuruyordu,
+        # dogrulama ise .venv'de yapildigi için "import failed" oluyordu).
+        cmd = ["uv", "pip", "install", "--python", sys.executable, name]
     else:
         cmd = [sys.executable, "-m", "pip", "install", name]
     result = run(cmd)

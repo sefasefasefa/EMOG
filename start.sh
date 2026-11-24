@@ -46,6 +46,18 @@ echo "Host: 0.0.0.0"
 echo "Port: 8002"
 echo "========================================="
 
+# Python yolu: once sanal ortam, yoksa sistem python'u.
+if [ -x ".venv/bin/python" ]; then
+    PY=".venv/bin/python"
+elif [ -x ".venv/Scripts/python.exe" ]; then
+    PY=".venv/Scripts/python.exe"
+else
+    PY="python"
+fi
+
+# Bagimliliklari baslangicta bir kez kontrol et/eksikse kur (disk siniri var).
+"$PY" setup_dependencies.py || true
+
 # Eski sunucu process'lerini otomatik kapat (yarnin eski kodla calismasin).
 # Once port 8002'yi dinleyenleri, sonra eski waitress/emog process'lerini oldur.
 echo "Eski process'ler kontrol ediliyor..."
@@ -68,16 +80,7 @@ sleep 2
 echo "Eski process'ler kapatildi."
 
 # .env dosyasi Django tarafindan python-dotenv ile yuklenir, burada gerek yok.
-
-# Python yolu: once sanal ortam, yoksa sistem python'u.
-# (waitress-serve komutu PATH'te olmayabilir; "python -m waitress" her zaman calisir.)
-if [ -x ".venv/bin/python" ]; then
-    PY=".venv/bin/python"
-elif [ -x ".venv/Scripts/python.exe" ]; then
-    PY=".venv/Scripts/python.exe"
-else
-    PY="python"
-fi
+# (waitress-serve komutu PATH'te olmayabilir; "python -m waitress" kullaniliyor.)
 
 # nginx /static/ → staticfiles/ alias kullanıyor; dosyaları her acilista topla.
 "$PY" -X utf8 manage.py collectstatic --noinput >/dev/null 2>&1 || true

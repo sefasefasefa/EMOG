@@ -38,6 +38,9 @@ echo =========================================
 
 REM .env dosyasi Django tarafindan python-dotenv ile yuklenir, burada gerek yok.
 
+REM Bagimliliklari baslangicta bir kez kontrol et/eksikse kur (disk siniri var).
+"%~dp0.venv\Scripts\python.exe" "%~dp0setup_dependencies.py"
+
 REM Eski sunucu process'lerini otomatik kapat (eski kodla calismasin).
 echo Eski process'ler kapatiliyor...
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":8002 " ^| findstr LISTENING') do (
