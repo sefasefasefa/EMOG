@@ -69,8 +69,18 @@ echo "Eski process'ler kapatildi."
 
 # .env dosyasi Django tarafindan python-dotenv ile yuklenir, burada gerek yok.
 
+# Python yolu: once sanal ortam, yoksa sistem python'u.
+# (waitress-serve komutu PATH'te olmayabilir; "python -m waitress" her zaman calisir.)
+if [ -x ".venv/bin/python" ]; then
+    PY=".venv/bin/python"
+elif [ -x ".venv/Scripts/python.exe" ]; then
+    PY=".venv/Scripts/python.exe"
+else
+    PY="python"
+fi
+
 # nginx /static/ → staticfiles/ alias kullanıyor; dosyaları her acilista topla.
-python -X utf8 manage.py collectstatic --noinput >/dev/null 2>&1 || true
+"$PY" -X utf8 manage.py collectstatic --noinput >/dev/null 2>&1 || true
 
 # Waitress'i baslat
-exec waitress-serve --host=0.0.0.0 --port=8002 --threads=$THREADS emog_project.wsgi:application
+exec "$PY" -m waitress --host=0.0.0.0 --port=8002 --threads=$THREADS emog_project.wsgi:application
