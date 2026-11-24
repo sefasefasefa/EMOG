@@ -1,0 +1,240 @@
+{% extends "agent_app/base.html" %}
+{% load static %}
+
+{% block title %}WhatsApp - EMOG{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'css/whatsapp.css' %}?v=2">
+{% endblock %}
+
+{% block content %}
+<div id="whatsapp-page" data-user-id="{{ user_id }}">
+  {% if remote_enabled %}
+  <div class="whatsapp-remote-hint" style="padding:10px 16px;background:var(--accent-bg);border-bottom:1px solid var(--accent-border);color:var(--fg-muted);font-size:12px;line-height:1.5;">
+    🤖 <strong style="color:var(--fg);">Uzaktan EMOG:</strong>
+    Bağlı WhatsApp hesabında <strong>Kendine mesaj</strong> sohbetine yazarak yapay zekâyı yönetebilirsin.
+    Komutlar: <code>durum</code>, <code>projeler</code>, <code>dur</code>, <code>yardım</code>.
+  </div>
+  {% endif %}
+  <div class="whatsapp-container">
+    <!-- Sidebar: Chat List -->
+    <aside class="whatsapp-sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span>WhatsApp</span>
+        </div>
+        <div class="sidebar-status" id="whatsapp-status-indicator-container">
+          <span class="status-indicator disconnected"></span>
+          <span id="whatsapp-status-text">Bağlantı kontrol ediliyor...</span>
+        </div>
+      </div>
+
+      <!-- QR Code Section -->
+      <div id="whatsapp-qr-container" class="qr-container" style="display: none;">
+        <div class="qr-card">
+          <div class="qr-icon">📱</div>
+          <h3>Telefonunuzla QR kodu tarayın</h3>
+          <p class="qr-hint">WhatsApp > Ayarlar > Bağlı Cihazlar > Cihaz Bağla</p>
+          <img id="whatsapp-qr-image" src="" alt="WhatsApp QR Code" class="qr-image">
+          <p class="qr-note">QR kod her oturumda yenilenir</p>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-qr">QR Kodu Yenile</button>
+      </div>
+
+      <!-- Not Connected State -->
+      <div id="whatsapp-not-connected" class="not-connected" style="display: none;">
+        <div class="not-connected-icon">📱</div>
+        <h3>WhatsApp Bağlı Değil</h3>
+        <p>Kendi WhatsApp hesabınızı bağlayarak mesajlaşmaya başlayın</p>
+        <button class="btn btn-primary" id="btn-init-whatsapp">WhatsApp Bağla</button>
+      </div>
+
+      <!-- Search -->
+      <div class="sidebar-search">
+        <input type="text" id="whatsapp-search" placeholder="Sohbet ara..." class="form-input">
+      </div>
+
+      <!-- Chat List -->
+      <div class="sidebar-chats">
+        <div id="whatsapp-chat-list" class="chat-list">
+          <div class="chat-empty">Yükleniyor...</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: Chat View -->
+    <main class="whatsapp-main">
+      <!-- Chat Header -->
+      <header class="chat-header">
+        <div class="chat-header-info">
+          <div class="chat-header-avatar" id="chat-header-avatar">👤</div>
+          <div class="chat-header-details">
+            <h3 id="whatsapp-chat-header-name">Sohbet Seçin</h3>
+            <span id="whatsapp-chat-header-subtitle" class="chat-header-subtitle">Bir sohbet seçerek mesajlaşmaya başlayın</span>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-chat-info" title="Sohbet Bilgileri">ℹ️</button>
+          <button class="btn btn-ghost btn-sm" id="btn-chat-mute" title="Sessize Al">🔕</button>
+          <button class="btn btn-ghost btn-sm" id="btn-chat-archive" title="Arşivle">📦</button>
+          <button class="btn btn-ghost btn-sm" id="btn-chat-more" title="Daha Fazla">⋮</button>
+        </div>
+      </header>
+
+      <!-- Messages Area -->
+      <div class="chat-messages" id="whatsapp-messages">
+        <div class="messages-empty">Sol taraftan bir sohbet seçin</div>
+      </div>
+
+      <!-- Message Input -->
+      <div class="chat-input-area">
+        <div class="input-tools">
+          <button type="button" class="tool-btn" id="btn-attach" title="Dosya Ekle">📎</button>
+          <input type="file" id="whatsapp-media-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" style="display: none;">
+          <button type="button" class="tool-btn" id="btn-emoji" title="Emoji">😊</button>
+        </div>
+        <div class="input-wrapper">
+          <textarea 
+            id="whatsapp-message-input" 
+            class="form-textarea" 
+            placeholder="Mesaj yazın... (Enter: Gönder, Shift+Enter: Yeni satır)"
+            rows="1"
+          ></textarea>
+        </div>
+        <button type="button" class="btn btn-primary btn-icon" id="btn-send" title="Gönder">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+        </button>
+      </div>
+    </main>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/whatsapp.js' %}?v=3"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Elements
+  const btnInit = document.getElementById('btn-init-whatsapp');
+  const btnDisconnect = document.getElementById('btn-disconnect-whatsapp');
+  const btnRefreshQr = document.getElementById('btn-refresh-qr');
+  const btnSend = document.getElementById('btn-send');
+  const messageInput = document.getElementById('whatsapp-message-input');
+  const mediaInput = document.getElementById('whatsapp-media-input');
+  const btnAttach = document.getElementById('btn-attach');
+  const searchInput = document.getElementById('whatsapp-search');
+
+  // Initialize WhatsApp manager (done in whatsapp.js via DOMContentLoaded)
+  // But we need to bind UI events after initialization
+  
+  // Wait for whatsapp manager to be ready
+  function waitForWhatsApp() {
+    return new Promise(resolve => {
+      if (window.whatsapp) {
+        resolve(window.whatsapp);
+      } else {
+        const check = setInterval(() => {
+          if (window.whatsapp) {
+            clearInterval(check);
+            resolve(window.whatsapp);
+          }
+        }, 100);
+      }
+    });
+  }
+
+  waitForWhatsApp().then(wa => {
+    // Send message on Enter (not Shift+Enter)
+    if (messageInput) {
+      messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          wa.sendMessage();
+        }
+      });
+
+      // Auto-resize textarea
+      messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+      });
+    }
+
+    // Send button
+    if (btnSend) {
+      btnSend.addEventListener('click', () => wa.sendMessage());
+    }
+
+    // Attach file
+    if (btnAttach && mediaInput) {
+      btnAttach.addEventListener('click', () => mediaInput.click());
+    }
+
+    // Initialize button
+    if (btnInit) {
+      btnInit.addEventListener('click', () => wa.initialize());
+    }
+
+    // Refresh QR
+    if (btnRefreshQr) {
+      btnRefreshQr.addEventListener('click', () => wa.loadQRCode());
+    }
+
+    // Search filter
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        const query = this.value.toLowerCase();
+        document.querySelectorAll('.chat-item').forEach(item => {
+          const name = item.querySelector('.chat-name')?.textContent.toLowerCase() || '';
+          const preview = item.querySelector('.chat-preview')?.textContent.toLowerCase() || '';
+          item.style.display = (name.includes(query) || preview.includes(query)) ? 'flex' : 'none';
+        });
+      });
+    }
+
+    // Chat header actions
+    const btnMute = document.getElementById('btn-chat-mute');
+    const btnArchive = document.getElementById('btn-chat-archive');
+    
+    if (btnMute) {
+      btnMute.addEventListener('click', async () => {
+        if (!wa.currentChatId) return;
+        const isMuted = btnMute.classList.toggle('active');
+        await wa.muteChat(wa.currentChatId, isMuted, -1);
+        btnMute.textContent = isMuted ? '🔇' : '🔕';
+        wa.showToast(isMuted ? 'Sohbet sessize alındı' : 'Sessize alma kaldırıldı', 'info');
+      });
+    }
+
+    if (btnArchive) {
+      btnArchive.addEventListener('click', async () => {
+        if (!wa.currentChatId) return;
+        const isArchived = btnArchive.classList.toggle('active');
+        await wa.archiveChat(wa.currentChatId, isArchived);
+        btnArchive.textContent = isArchived ? '📤' : '📦';
+        wa.showToast(isArchived ? 'Sohbet arşivlendi' : 'Arşivden çıkarıldı', 'info');
+        wa.loadChats();
+      });
+    }
+
+    // Mark as read when chat opened
+    const originalOpenChat = wa.openChat.bind(wa);
+    wa.openChat = async function(chatId, name, isGroup) {
+      await originalOpenChat(chatId, name, isGroup);
+      await wa.markAsRead(chatId);
+    };
+  });
+
+  // Request notification permission
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+});
+</script>
+{% endblock %}

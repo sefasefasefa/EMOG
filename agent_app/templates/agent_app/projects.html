@@ -1,0 +1,809 @@
+{% extends 'agent_app/base.html' %}
+
+{% block title %}Projects — EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .page-header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; }
+  .page-header .subtitle { color: var(--fg-muted); margin: 0; font-size: 0.95rem; }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1.5rem;
+  }
+  .project-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    transition: transform .2s, box-shadow .2s, border-color .2s;
+    height: 100%;
+  }
+  .project-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--accent-border);
+  }
+  .project-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .project-card-info { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
+  .project-icon {
+    width: 48px; height: 48px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    color: #042027; flex-shrink: 0;
+  }
+  .project-meta { flex: 1; min-width: 0; }
+  .project-name { font-weight: 600; color: var(--fg); font-size: 0.9375rem; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .project-tags { display: flex; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; color: var(--fg-muted); }
+  .project-tag { background: var(--bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); }
+  .project-status { flex-shrink: 0; }
+  .project-description { color: var(--fg-muted); font-size: 0.8125rem; margin: 0 0 16px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .project-actions { display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .project-actions .btn { flex: 1; min-width: 80px; }
+  .project-actions .btn-ghost { flex: 0 0 auto; min-width: 70px; padding: 8px 12px; font-size: 0.8rem; }
+  .project-actions .btn-danger,
+  .project-actions [data-action="delete"] { background: var(--error-bg); color: var(--error); border-color: var(--error); flex: 0 0 auto; min-width: 70px; }
+  .project-actions .btn-danger:hover,
+  .project-actions [data-action="delete"]:hover { background: var(--error); color: white; }
+
+  .import-form { max-width: 600px; }
+  .import-form .card-header { padding-bottom: 0; border-bottom: none; }
+  .import-form .card-body { padding-top: 0; }
+  .form-actions { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+
+  .file-tree { font-size: 0.875rem; font-family: var(--font-mono); max-height: 50vh; overflow-y: auto; }
+  .file-tree-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; transition: background .15s; }
+  .file-tree-item:hover { background: var(--card-hover); }
+  .file-tree-item.selected { background: var(--accent-bg); color: var(--accent); }
+  .file-tree-item .icon { width: 16px; text-align: center; }
+  .file-tree-children { margin-left: 20px; border-left: 1px solid var(--border); padding-left: 8px; }
+  .file-tree-toggle { background: none; border: none; color: var(--fg-muted); cursor: pointer; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; }
+  .file-tree-toggle:hover { color: var(--fg); background: var(--card-hover); }
+
+  .editor-wrapper { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: #071426; min-height: 500px; display: flex; flex-direction: column; }
+  .editor-toolbar { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; }
+  .editor-tabs { display: flex; gap: 0.25rem; flex: 1; flex-wrap: wrap; }
+  .editor-tab { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px 6px 0 0; font-size: 12px; color: var(--fg-muted); cursor: pointer; }
+  .editor-tab.active { background: #071426; border-bottom-color: #071426; color: var(--fg); }
+  .editor-tab .close { background: none; border: none; color: var(--fg-subtle); cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+  .editor-tab .close:hover { color: var(--error); }
+  .editor-content { flex: 1; position: relative; min-height: 500px; }
+  .editor-textarea { width: 100%; height: 100%; border: none; background: transparent; color: var(--fg); font-family: var(--font-mono); font-size: 0.875rem; line-height: 1.6; padding: 1rem; resize: none; outline: none; tab-size: 2; spellcheck: false; }
+  .editor-status { display: flex; align-items: center; gap: 1rem; padding: 0.5rem 1rem; border-top: 1px solid var(--border); background: var(--card); font-size: 12px; color: var(--fg-muted); flex-wrap: wrap; }
+
+  .terminal-wrapper { min-height: 500px; display: flex; flex-direction: column; background: #071426; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+  .terminal-header { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--card); flex-wrap: wrap; }
+  .terminal-body { flex: 1; padding: 1rem; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.6; overflow-y: auto; color: #e6f0f6; white-space: pre-wrap; word-wrap: break-word; }
+  .terminal-line { margin: 0; }
+  .terminal-prompt { color: var(--accent); font-weight: 600; }
+  .terminal-input-line { display: flex; align-items: center; padding: 0.75rem 1rem; border-top: 1px solid var(--border); background: var(--card); }
+  .terminal-input-line .prompt { color: var(--accent); font-weight: 600; margin-right: 0.5rem; }
+  .terminal-input { flex: 1; background: transparent; border: none; color: var(--fg); font-family: inherit; font-size: 0.875rem; outline: none; autocomplete: off; spellcheck: false; min-width: 0; }
+
+  .git-section { margin-bottom: 1.5rem; }
+  .git-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; }
+  .git-section-title { font-size: 0.875rem; font-weight: 600; }
+  .git-status { min-height: 60px; font-family: var(--font-mono); font-size: 0.8125rem; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  .git-log { min-height: 200px; font-family: var(--font-mono); font-size: 0.8125rem; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+
+  .settings-grid { display: grid; gap: 1rem; }
+  .settings-item { display: flex; flex-direction: column; gap: 0.375rem; }
+  .settings-label { font-size: 12px; font-weight: 500; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.05em; }
+  .settings-value { font-family: var(--font-mono); font-size: 0.875rem; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; word-break: break-all; }
+
+  @media (max-width: 1024px) {
+    .project-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  }
+  @media (max-width: 639px) {
+    .project-grid { grid-template-columns: 1fr; }
+    .project-card { padding: 16px; }
+    .project-card-header { flex-direction: column; align-items: stretch; }
+    .project-actions { flex-direction: column; }
+    .project-actions .btn { width: 100%; }
+    .file-tree { max-height: 40vh; }
+    .editor-wrapper { min-height: 400px; }
+    .terminal-wrapper { min-height: 400px; }
+  }
+
+/* Mobile responsive overrides */
+@media (max-width: 768px) {
+  .grid,.grid-2,.grid-3,.grid-4,.cards,.card-grid,.project-grid,.repo-grid,.stats,.stats-grid,.features,.pricing-grid{grid-template-columns:1fr !important}
+  .row,.flex,.toolbar,.filters,.filter-bar,.actions,.header-actions,.page-header,.search-bar,.controls,.btn-group{flex-wrap:wrap !important}
+  .sidebar,.side,.aside,.left,.right,.panel-left,.panel-right{width:100% !important;max-width:100% !important;position:static !important}
+  .split,.split-view,.two-column,.columns,.layout{grid-template-columns:1fr !important;flex-direction:column !important}
+  table{display:block;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  th,td{white-space:nowrap}
+  .container,.wrap,.content,.main,.page{padding-left:14px !important;padding-right:14px !important}
+  .card,.panel,.box{padding:14px !important}
+  h1{font-size:1.6rem !important} h2{font-size:1.3rem !important}
+  input,select,textarea,.form-control{max-width:100% !important;font-size:16px}
+  .btn,.button{max-width:100%}
+  .modal,.dialog,.popup{width:calc(100vw - 20px) !important;max-width:calc(100vw - 20px) !important;margin:10px auto !important}
+  pre,code{max-width:100%;overflow-x:auto}
+  img,video,canvas,iframe{max-width:100%;height:auto}
+  .hide-mobile{display:none !important}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <header class="page-header">
+    <div>
+      <h1>Projects</h1>
+      <p class="subtitle">AI ile ürettiğin projeler — aç, düzenle, sohbet et</p>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <button class="btn btn-secondary" id="refresh-projects">Refresh</button>
+      <a href="#" class="btn btn-primary" data-tab="import">Import from GitHub</a>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="projects">My Projects</button>
+    <button class="tab-btn" data-tab="github-repos">GitHub Repositories</button>
+    <button class="tab-btn" data-tab="import">Import from GitHub</button>
+  </div>
+
+  <div id="tab-projects" class="tab-panel active">
+    <div id="project-grid" class="project-grid">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:64px;height:64px;">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <h3>Henüz proje yok</h3>
+        <p>Chat sayfasında bir şey inşa et; projen burada görünecek.</p>
+        <a class="btn btn-primary" href="/chat/" style="margin-top:1rem;">Chat'e git</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-github-repos" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <h3 style="margin:0 0 4px;">GitHub Repositories</h3>
+            <p class="small" style="margin:0;">Browse your GitHub repositories and import them with one click</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-secondary" id="refresh-github-repos">Refresh</button>
+            <span class="small" id="github-repos-count">0 repos</span>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="github-repos-list" class="project-grid">
+          <div class="empty-state" style="grid-column:1/-1;padding:2rem;">
+            <p>Click "Refresh" to load your GitHub repositories</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-import" class="tab-panel">
+    <div class="card import-form">
+      <div class="card-header">
+        <h3 style="margin:0;font-size:1.125rem;">Import from GitHub</h3>
+      </div>
+      <div class="card-body">
+        <form id="import-form">
+          <div class="form-group">
+            <label class="form-label">GitHub Repository URL</label>
+            <input type="url" name="repo_url" class="form-input" placeholder="https://github.com/user/repo" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Branch</label>
+              <input type="text" name="branch" class="form-input" placeholder="main" value="main">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Project Name</label>
+              <input type="text" name="project_name" class="form-input" placeholder="Auto (from repo name)" pattern="[A-Za-z0-9_.\-]+" title="Letters, numbers, underscore, dash, dot">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Target Directory</label>
+            <input type="text" name="target_dir" class="form-input" placeholder="./projects/repo-name" readonly style="background:var(--bg);color:var(--fg-muted);">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Import & Open</button>
+            <button type="button" class="btn btn-secondary" id="cancel-import">Cancel</button>
+          </div>
+          <div id="import-progress" style="display:none;margin-top:1rem;">
+            <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+            <div id="progress-text" class="progress-text">Preparing...</div>
+          </div>
+          <div id="import-result" style="display:none;margin-top:1rem;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="project-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal" style="max-width:900px;">
+    <header class="modal-header">
+      <h2 class="modal-title" id="modal-title">Project</h2>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="modal-github-btn" class="btn btn-primary btn-sm">GitHub</button>
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+      </div>
+    </header>
+    <div class="modal-tabs" role="tablist">
+      <button class="modal-tab active" data-detail-tab="files" role="tab" aria-selected="true">Files</button>
+      <button class="modal-tab" data-detail-tab="editor" role="tab" aria-selected="false">Editor</button>
+      <button class="modal-tab" data-detail-tab="terminal" role="tab" aria-selected="false">Terminal</button>
+      <button class="modal-tab" data-detail-tab="git" role="tab" aria-selected="false">Git</button>
+      <button class="modal-tab" data-detail-tab="settings" role="tab" aria-selected="false">Settings</button>
+    </div>
+    <div class="modal-body">
+      <div id="detail-tab-files" class="modal-tab-panel active" role="tabpanel">
+        <div id="file-tree" class="file-tree"></div>
+      </div>
+      <div id="detail-tab-editor" class="modal-tab-panel" role="tabpanel">
+        <div class="editor-wrapper">
+          <div class="editor-toolbar">
+            <div class="editor-tabs" id="editor-tabs"></div>
+            <button class="btn btn-ghost btn-sm" id="close-all-tabs">Close All</button>
+          </div>
+          <div class="editor-content">
+            <textarea id="editor-textarea" class="editor-textarea" spellcheck="false"></textarea>
+          </div>
+          <div class="editor-status">
+            <span id="editor-status-file">No file open</span>
+            <span id="editor-status-encoding">UTF-8</span>
+            <span id="editor-status-line">Ln 1, Col 1</span>
+          </div>
+        </div>
+      </div>
+      <div id="detail-tab-terminal" class="modal-tab-panel" role="tabpanel">
+        <div class="terminal-wrapper">
+          <div class="terminal-header">
+            <span>💻</span>
+            <span style="font-size:.875rem;">Terminal</span>
+            <span style="margin-left:auto;font-size:.8125rem;color:var(--fg-muted);" id="term-status">Ready</span>
+          </div>
+          <div class="terminal-body" id="terminal-body"></div>
+          <div class="terminal-input-line">
+            <span class="prompt">$</span>
+            <input type="text" class="terminal-input" id="terminal-input" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </div>
+      <div id="detail-tab-git" class="modal-tab-panel" role="tabpanel">
+        <div class="git-section">
+          <div class="git-section-header">
+            <span class="git-section-title">Git Status</span>
+            <button class="btn btn-secondary btn-sm" id="git-status-refresh">Refresh</button>
+          </div>
+          <div class="git-status" id="git-status">Loading...</div>
+        </div>
+        <div class="git-section">
+          <div class="git-section-header">
+            <span class="git-section-title">Commit</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Commit Message</label>
+            <textarea class="form-textarea" id="git-commit-msg" rows="3" placeholder="Describe your changes..."></textarea>
+          </div>
+          <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap;">
+            <button class="btn btn-primary" id="git-commit-btn">Commit</button>
+            <button class="btn btn-secondary" id="git-push-btn">Push</button>
+            <button class="btn btn-secondary" id="git-pull-btn">Pull</button>
+          </div>
+        </div>
+        <div class="git-section">
+          <div class="git-section-header">
+            <span class="git-section-title">History</span>
+            <button class="btn btn-secondary btn-sm" id="git-log-refresh">Refresh</button>
+          </div>
+          <div class="git-log" id="git-log">Loading...</div>
+        </div>
+      </div>
+      <div id="detail-tab-settings" class="modal-tab-panel" role="tabpanel">
+        <div class="card">
+          <div class="card-body">
+            <div class="settings-grid">
+              <div class="settings-item">
+                <span class="settings-label">Project Name</span>
+                <span class="settings-value" id="settings-name">-</span>
+              </div>
+              <div class="settings-item">
+                <span class="settings-label">Path</span>
+                <span class="settings-value" id="settings-path">-</span>
+              </div>
+              <div class="settings-item">
+                <span class="settings-label">Git Remote</span>
+                <span class="settings-value" id="settings-remote">-</span>
+              </div>
+              <div class="settings-item">
+                <span class="settings-label">Branch</span>
+                <span class="settings-value" id="settings-branch">-</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:.5rem;margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border);flex-wrap:wrap;">
+              <button class="btn btn-secondary" id="settings-refresh">Refresh</button>
+              <button class="btn btn-danger" id="settings-delete">Delete Project</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const $ = (id) => document.getElementById(id);
+
+  // State
+  let currentProject = null;
+  let editorTabs = [];
+  let activeEditorTab = null;
+  let editorModified = new Map();
+  let terminalHistory = [];
+  let terminalCwd = '';
+  let githubReposLoaded = false;
+  let currentDetailTab = 'files';
+
+  // API
+  const api = {
+    list: () => fetch('/projects/api/list/', {credentials:'include'}).then(r=>r.json()),
+    import: (data) => fetch('/projects/api/import/', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)}).then(r=>r.json()),
+    getProject: (id) => fetch(`/projects/api/${id}/`, {credentials:'include'}).then(r=>r.json()),
+    deleteProject: (id) => fetch(`/projects/api/${id}/delete/`, {method:'POST', credentials:'include'}).then(r=>r.json()),
+    fileList: (id) => fetch(`/projects/api/${id}/files/`, {credentials:'include'}).then(r=>r.json()),
+    fileRead: (id, path) => fetch(`/projects/api/${id}/files/read/?path=${encodeURIComponent(path)}`, {credentials:'include'}).then(r=>r.json()),
+    fileWrite: (id, path, content) => fetch(`/projects/api/${id}/files/write/`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, content})}).then(r=>r.json()),
+    fileDelete: (id, path) => fetch(`/projects/api/${id}/files/delete/`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path})}).then(r=>r.json()),
+    terminalExec: (id, cmd, cwd) => fetch(`/projects/api/${id}/terminal/`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cmd, cwd})}).then(r=>r.json()),
+    gitStatus: (id) => fetch(`/projects/api/${id}/git/status/`, {credentials:'include'}).then(r=>r.json()),
+    gitCommit: (id, msg) => fetch(`/projects/api/${id}/git/commit/`, {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:msg})}).then(r=>r.json()),
+    gitPush: (id) => fetch(`/projects/api/${id}/git/push/`, {method:'POST', credentials:'include'}).then(r=>r.json()),
+    gitPull: (id) => fetch(`/projects/api/${id}/git/pull/`, {method:'POST', credentials:'include'}).then(r=>r.json()),
+    gitLog: (id) => fetch(`/projects/api/${id}/git/log/`, {credentials:'include'}).then(r=>r.json()),
+    githubRepos: () => fetch('/github/repos/', {credentials:'include'}).then(r=>r.json()),
+  };
+
+  // Helpers
+  function showToast(msg, type='info') { window.APP?.toast?.(msg, type); }
+  function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+  function formatDate(dateStr) { if (!dateStr) return '-'; const d = new Date(dateStr); return d.toLocaleDateString('tr-TR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  function getLangIcon(lang) { const icons = {python:'🐍',javascript:'📜',typescript:'📘',java:'☕',go:'🐹',rust:'🦀',cpp:'🔷',c:'🔧',html:'🌐',css:'🎨',json:'📋',markdown:'📝',dockerfile:'🐳',yaml:'⚙️'}; return icons[lang?.toLowerCase()] || '📄'; }
+  function getStatusBadge(status) { const map = {ready:['Hazır','badge-success'],building:['Üretiliyor','badge-warning'],queued:['Sırada','badge-warning'],importing:['İçe aktarılıyor','badge-warning'],error:['Hata','badge-error'],stopped:['Durdu','badge-neutral']}; const [text, cls] = map[status] || [status || 'Bilinmiyor', 'badge-neutral']; return `<span class="badge ${cls}">${text}</span>`; }
+
+  // Tab Navigation
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => { btn.classList.toggle('active', btn.dataset.tab === tabName); });
+    document.querySelectorAll('.tab-panel[id^="tab-"]').forEach(panel => { panel.classList.toggle('active', panel.id === 'tab-' + tabName); });
+  }
+  document.querySelectorAll('[data-tab]').forEach(el => { el.addEventListener('click', (e) => { e.preventDefault(); switchTab(el.dataset.tab); }); });
+
+  // Detail Tabs
+  function switchDetailTab(tabName) {
+    document.querySelectorAll('.modal-tab[data-detail-tab]').forEach(btn => { btn.classList.toggle('active', btn.dataset.detailTab === tabName); btn.setAttribute('aria-selected', btn.dataset.detailTab === tabName); });
+    document.querySelectorAll('.modal-tab-panel[id^="detail-tab-"]').forEach(panel => { panel.classList.toggle('active', panel.id === 'detail-tab-' + tabName); });
+    currentDetailTab = tabName;
+    if (currentProject) {
+      if (tabName === 'files') loadFileTree();
+      else if (tabName === 'terminal') initTerminal();
+      else if (tabName === 'git') loadGitStatus();
+      else if (tabName === 'settings') loadProjectSettings();
+    }
+  }
+  document.querySelectorAll('.modal-tab[data-detail-tab]').forEach(btn => { btn.addEventListener('click', () => switchDetailTab(btn.dataset.detailTab)); });
+
+  // Project Modal
+  function openProjectModal(project) {
+    currentProject = project;
+    $('modal-title').textContent = project.name;
+    $('project-modal').classList.add('open');
+    switchDetailTab('files');
+
+    // GitHub butonu: projeye özel GitHub sayfasına yönlendirir
+    const ghBtn = $('modal-github-btn');
+    if (ghBtn) {
+      ghBtn.onclick = () => {
+        window.location.href = '/github/?project=' + encodeURIComponent(currentProject.id);
+      };
+    }
+  }
+  function closeProjectModalFn() {
+    $('project-modal').classList.remove('open');
+    currentProject = null;
+    editorTabs = [];
+    activeEditorTab = null;
+    editorModified.clear();
+    $('editor-tabs').innerHTML = '';
+    $('editor-textarea').value = '';
+    $('terminal-body').innerHTML = '';
+    terminalHistory = [];
+    terminalCwd = '';
+    // Modali kapattiginda Projeler listesinin en ustune don
+    window.scrollTo(0, 0);
+  }
+  $('project-modal').querySelector('.modal-close').addEventListener('click', closeProjectModalFn);
+  $('project-modal').addEventListener('click', (e) => { if (e.target === $('project-modal')) closeProjectModalFn(); });
+
+  // Load Projects
+  async function loadProjects() {
+    try {
+      const res = await api.list();
+      if (res.ok) { renderProjects(res.projects || []); }
+      else { showToast(res.error || 'Failed to load projects', 'error'); }
+    } catch (e) { showToast('Connection error: ' + e.message, 'error'); }
+  }
+
+  function renderProjects(projects) {
+    const grid = $('project-grid');
+    if (!projects.length) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;text-align:center;padding:4rem 2rem;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:64px;height:64px;margin-bottom:1.5rem;opacity:.4;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <p style="font-size:1.25rem;margin:0 0 .5rem;">Henüz proje yok</p>
+          <p style="color:var(--fg-muted);margin-bottom:1.5rem;">Chat sayfasında bir şey inşa et; projen burada görünecek.</p>
+          <a class="btn btn-primary" href="/chat/" style="margin-top:1rem">Chat'e git</a>
+        </div>`;
+      return;
+    }
+    grid.innerHTML = projects.map(p => `
+      <div class="project-card" data-id="${p.id}">
+        <div class="project-card-header">
+          <div class="project-card-info">
+            <div class="project-icon">${getLangIcon(p.language)}</div>
+            <div class="project-meta">
+              <div class="project-name">${escapeHtml(p.name)}</div>
+              <div class="project-tags">
+                <span class="project-tag">${escapeHtml(p.language || 'Unknown')}</span>
+                <span class="project-tag">${formatDate(p.updated_at)}</span>
+              </div>
+            </div>
+          </div>
+          ${getStatusBadge(p.status)}
+        </div>
+        <p class="project-description">${escapeHtml(p.description || 'Açıklama yok')}</p>
+        ${p.last_error ? `<p style="color:var(--error);font-size:.75rem;margin:-8px 0 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(p.last_error)}">${escapeHtml(p.last_error)}</p>` : ''}
+        <div class="project-actions">
+          <button class="btn btn-primary" data-action="open" data-id="${p.id}">Aç</button>
+          <button class="btn btn-secondary" data-action="files" data-id="${p.id}">Dosyalar</button>
+          <button class="btn btn-secondary" data-action="terminal" data-id="${p.id}">Terminal</button>
+          <button class="btn btn-ghost" data-action="delete" data-id="${p.id}">Sil</button>
+        </div>
+      </div>
+    `).join('');
+
+    grid.querySelectorAll('.project-card[data-id]').forEach(card => {
+      card.style.cursor = 'pointer';
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('button, a')) return;
+        setChatProject(card.dataset.id);
+      });
+    });
+    grid.querySelectorAll('[data-action="open"]').forEach(btn => { btn.addEventListener('click', (e) => { e.stopPropagation(); setChatProject(btn.dataset.id); }); });
+    grid.querySelectorAll('[data-action="files"]').forEach(btn => { btn.addEventListener('click', (e) => { e.stopPropagation(); openProjectFiles(btn.dataset.id); }); });
+    grid.querySelectorAll('[data-action="terminal"]').forEach(btn => { btn.addEventListener('click', (e) => { e.stopPropagation(); loadAndOpenProject(btn.dataset.id, 'terminal'); }); });
+    grid.querySelectorAll('[data-action="delete"]').forEach(btn => { btn.addEventListener('click', async (e) => { e.stopPropagation(); if (confirm('Delete this project? This cannot be undone.')) await deleteProject(btn.dataset.id); }); });
+  }
+
+  async function loadAndOpenProject(id, defaultTab = 'files') {
+    try {
+      const res = await api.getProject(id);
+      if (res.ok) { openProjectModal(res.project); setTimeout(() => switchDetailTab(defaultTab), 0); }
+      else { showToast(res.error || 'Failed to load project', 'error'); }
+    } catch (e) { showToast('Connection error: ' + e.message, 'error'); }
+  }
+
+  async function deleteProject(id) {
+    try {
+      const res = await api.deleteProject(id);
+      if (res.ok) { showToast('Project deleted', 'success'); loadProjects(); if (currentProject?.id === id) closeProjectModalFn(); }
+      else { showToast(res.error || 'Failed to delete', 'error'); }
+    } catch (e) { showToast('Connection error: ' + e.message, 'error'); }
+  }
+
+  async function setChatProject(id) {
+    try {
+      const res = await api.getProject(id);
+      if (res.ok) {
+        showToast('Proje seçildi, Chat açılıyor...', 'success');
+        window.location.href = '/chat/?project=' + encodeURIComponent(id);
+      } else { showToast(res.error || 'Proje yüklenemedi', 'error'); }
+    } catch (e) { showToast('Bağlantı hatası: ' + e.message, 'error'); }
+  }
+
+  // Dosyalar: ayrı modal yerine chat ekranındaki Tools > Filetree açılır.
+  function openProjectFiles(id) {
+    showToast('Proje dosyaları açılıyor...', 'info');
+    window.location.href = '/chat/?project=' + encodeURIComponent(id) + '&panel=tools&view=filetree';
+  }
+
+  // Import Form
+  const importForm = $('import-form');
+  const importProgress = $('import-progress');
+  const importResult = $('import-result');
+  const progressFill = $('progress-fill');
+  const progressText = $('progress-text');
+
+  importForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(importForm);
+    const data = Object.fromEntries(formData);
+
+    importProgress.style.display = 'block';
+    importResult.style.display = 'none';
+    progressFill.style.width = '10%';
+    progressText.textContent = 'Starting...';
+
+    try {
+      const res = await api.import(data);
+      if (res.ok) {
+        progressFill.style.width = '100%';
+        progressText.textContent = 'Import complete!';
+        importResult.style.display = 'block';
+        importResult.innerHTML = '<strong style="color:var(--success)">Success!</strong> Project is being prepared...';
+        showToast('Project import started...', 'success');
+        setTimeout(() => setChatProject(res.project_id), 2000);
+      } else { throw new Error(res.error || 'Import failed'); }
+    } catch (e) {
+      importProgress.style.display = 'none';
+      importResult.style.display = 'block';
+      importResult.innerHTML = '<span style="color:var(--error)">' + escapeHtml(e.message) + '</span>';
+      showToast(e.message, 'error');
+    } finally { progressFill.style.width = '0%'; }
+  });
+
+  $('cancel-import').addEventListener('click', () => { importForm.reset(); importProgress.style.display = 'none'; importResult.style.display = 'none'; switchTab('projects'); });
+
+  // Refresh Projects
+  $('refresh-projects').addEventListener('click', loadProjects);
+
+  // GitHub Repos
+  async function loadGitHubRepos() {
+    if (githubReposLoaded) return;
+    try {
+      const res = await api.githubRepos();
+      if (res.ok) { renderGitHubRepos(res.repos || []); githubReposLoaded = true; }
+      else { showToast(res.error || 'Failed to load GitHub repos', 'error'); }
+    } catch (e) { showToast('Connection error: ' + e.message, 'error'); }
+  }
+
+  function renderGitHubRepos(repos) {
+    const list = $('github-repos-list');
+    const count = $('github-repos-count');
+    count.textContent = repos.length + ' repo' + (repos.length !== 1 ? 's' : '');
+
+    if (!repos.length) { list.innerHTML = '<div class="empty-state" style="grid-column:1/-1;padding:2rem;"><p>No repositories found. <a href="/github/" style="color:var(--accent)">Connect GitHub</a> first.</p></div>'; return; }
+
+    list.innerHTML = repos.map(r => `
+      <div class="project-card" data-repo="${escapeHtml(r.full_name)}">
+        <div class="project-card-header">
+          <div class="project-card-info">
+            <div class="project-icon">${r.private ? '🔒' : '🌐'}</div>
+            <div class="project-meta">
+              <div class="project-name">${escapeHtml(r.full_name)}</div>
+              <div class="project-tags">
+                <span class="project-tag">${escapeHtml(r.language || 'Unknown')}</span>
+                <span class="project-tag">${r.private ? 'Private' : 'Public'}</span>
+                <span class="project-tag">⭐ ${r.stargazers_count || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="project-description">${escapeHtml(r.description || 'No description')}</p>
+        <div class="project-actions">
+          <button class="btn btn-primary" data-action="import-repo" data-repo="${escapeHtml(r.full_name)}">Import</button>
+          <a href="${r.html_url}" target="_blank" class="btn btn-ghost" style="flex:1;text-align:center;">View on GitHub</a>
+        </div>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('[data-action="import-repo"]').forEach(btn => {
+      btn.addEventListener('click', () => { const repo = btn.dataset.repo; switchTab('import'); $('import-form').repo_url.value = 'https://github.com/' + repo; $('import-form').project_name.value = repo.split('/')[1]; });
+    });
+  }
+
+  $('refresh-github-repos').addEventListener('click', async () => { githubReposLoaded = false; await loadGitHubRepos(); });
+
+  // File Tree
+  function loadFileTree() {
+    if (!currentProject) return;
+    const tree = $('file-tree');
+    tree.innerHTML = '<div style="padding:1rem;text-align:center;color:var(--fg-muted);">Loading...</div>';
+
+    api.fileList(currentProject.id).then(res => {
+      if (!res.ok) { tree.innerHTML = '<div style="padding:1rem;color:var(--error);">Failed to load files</div>'; return; }
+      tree.innerHTML = buildFileTree(res.files || []);
+      attachFileTreeEvents();
+    });
+  }
+
+  function buildFileTree(files, prefix = '') {
+    if (!files.length) return '<div style="padding:1rem;text-align:center;color:var(--fg-muted);">No files</div>';
+
+    const dirs = {};
+    const rootFiles = [];
+
+    files.forEach(f => {
+      const parts = f.path.split('/');
+      if (parts.length === 1) { rootFiles.push(f); }
+      else { const dir = parts[0]; if (!dirs[dir]) dirs[dir] = []; dirs[dir].push({...f, path: parts.slice(1).join('/')}); }
+    });
+
+    let html = '';
+    Object.keys(dirs).sort().forEach(dir => {
+      html += `
+        <div class="file-tree-item" data-path="${escapeHtml(dir)}" data-type="dir">
+          <button class="file-tree-toggle" aria-expanded="false">▼</button>
+          <span class="icon">📁</span>
+          <span>${escapeHtml(dir)}</span>
+        </div>
+        <div class="file-tree-children" style="display:none;">${buildFileTree(dirs[dir])}</div>
+      `;
+    });
+    rootFiles.sort((a,b) => a.path.localeCompare(b.path)).forEach(f => {
+      html += `
+        <div class="file-tree-item" data-path="${escapeHtml(f.path)}" data-type="file" data-full-path="${escapeHtml(f.path)}">
+          <span class="icon">${getFileIcon(f.path)}</span>
+          <span>${escapeHtml(f.path)}</span>
+        </div>
+      `;
+    });
+    return html;
+  }
+
+  function getFileIcon(path) { const ext = path.split('.').pop().toLowerCase(); const icons = {py:'🐍',js:'📜',ts:'📘',jsx:'⚛️',tsx:'⚛️',html:'🌐',css:'🎨',json:'📋',md:'📝',txt:'📄',dockerfile:'🐳',yml:'⚙️',yaml:'⚙️',toml:'⚙️',sh:'🔧',rs:'🦀',go:'🐹',java:'☕',cpp:'🔷',c:'🔧'}; return icons[ext] || '📄'; }
+
+  function attachFileTreeEvents() {
+    const tree = $('file-tree');
+    tree.querySelectorAll('.file-tree-toggle').forEach(btn => { btn.addEventListener('click', (e) => { e.stopPropagation(); const item = btn.closest('.file-tree-item'); const children = item.nextElementSibling; const expanded = btn.getAttribute('aria-expanded') === 'true'; btn.setAttribute('aria-expanded', String(!expanded)); btn.textContent = expanded ? '▶' : '▼'; children.style.display = expanded ? 'none' : 'block'; }); });
+    tree.querySelectorAll('.file-tree-item[data-type="file"]').forEach(item => { item.addEventListener('click', () => { tree.querySelectorAll('.file-tree-item.selected').forEach(el => el.classList.remove('selected')); item.classList.add('selected'); openFileInEditor(item.dataset.fullPath); }); });
+  }
+
+  // Editor
+  function openFileInEditor(path) {
+    if (!currentProject) return;
+    const existing = editorTabs.findIndex(t => t.path === path);
+    if (existing >= 0) { switchEditorTab(existing); return; }
+
+    api.fileRead(currentProject.id, path).then(res => {
+      if (!res.ok) { showToast(res.error || 'Failed to read file', 'error'); return; }
+      const tab = {path, content: res.content || '', saved: true};
+      editorTabs.push(tab);
+      activeEditorTab = editorTabs.length - 1;
+      renderEditorTabs();
+      $('editor-textarea').value = tab.content;
+      updateEditorStatus();
+    });
+  }
+
+  function renderEditorTabs() {
+    const container = $('editor-tabs');
+    container.innerHTML = editorTabs.map((tab, i) => `
+      <div class="editor-tab ${i === activeEditorTab ? 'active' : ''}" data-index="${i}">
+        <span>${escapeHtml(tab.path.split('/').pop())}</span>
+        ${!tab.saved ? '<span class="modified" style="color:var(--warning);font-size:10px;">●</span>' : ''}
+        <button class="close" aria-label="Close">×</button>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.editor-tab').forEach(tab => { tab.addEventListener('click', (e) => { if (e.target.classList.contains('close')) { closeEditorTab(parseInt(tab.dataset.index)); } else { switchEditorTab(parseInt(tab.dataset.index)); } }); });
+  }
+
+  function switchEditorTab(index) {
+    if (index < 0 || index >= editorTabs.length) return;
+    if (activeEditorTab !== null && editorTabs[activeEditorTab]) { editorTabs[activeEditorTab].content = $('editor-textarea').value; }
+    activeEditorTab = index;
+    const tab = editorTabs[index];
+    $('editor-textarea').value = tab.content;
+    renderEditorTabs();
+    updateEditorStatus();
+  }
+
+  function closeEditorTab(index) {
+    if (index < 0 || index >= editorTabs.length) return;
+    editorTabs.splice(index, 1);
+    if (activeEditorTab >= index) activeEditorTab = Math.max(0, activeEditorTab - 1);
+    if (editorTabs.length === 0) { activeEditorTab = null; $('editor-textarea').value = ''; }
+    else { const tab = editorTabs[activeEditorTab]; $('editor-textarea').value = tab.content; }
+    renderEditorTabs();
+    updateEditorStatus();
+  }
+
+  $('close-all-tabs').addEventListener('click', () => { editorTabs = []; activeEditorTab = null; editorModified.clear(); $('editor-textarea').value = ''; renderEditorTabs(); updateEditorStatus(); });
+
+  $('editor-textarea').addEventListener('input', () => { if (activeEditorTab !== null && editorTabs[activeEditorTab]) { editorTabs[activeEditorTab].saved = false; renderEditorTabs(); } });
+  $('editor-textarea').addEventListener('keydown', (e) => { if (e.key === 'Tab') { e.preventDefault(); const start = e.target.selectionStart; const end = e.target.selectionEnd; e.target.value = e.target.value.substring(0, start) + '  ' + e.target.value.substring(end); e.target.selectionStart = e.target.selectionEnd = start + 2; } if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveCurrentFile(); } });
+
+  function saveCurrentFile() {
+    if (activeEditorTab === null || !currentProject) return;
+    const tab = editorTabs[activeEditorTab];
+    api.fileWrite(currentProject.id, tab.path, $('editor-textarea').value).then(res => { if (res.ok) { tab.saved = true; renderEditorTabs(); showToast('File saved', 'success'); } else { showToast(res.error || 'Failed to save', 'error'); } });
+  }
+
+  function updateEditorStatus() {
+    if (activeEditorTab !== null && editorTabs[activeEditorTab]) { const tab = editorTabs[activeEditorTab]; $('editor-status-file').textContent = tab.path; const lines = $('editor-textarea').value.split('\n'); $('editor-status-line').textContent = `Ln ${lines.length}, Col 1`; } else { $('editor-status-file').textContent = 'No file open'; $('editor-status-line').textContent = 'Ln 1, Col 1'; }
+  }
+
+  // Terminal
+  function initTerminal() { if (!currentProject) return; terminalCwd = currentProject.path || '/'; $('terminal-body').innerHTML = ''; appendTerminalLine('Welcome to EMOG Terminal', 'system'); appendTerminalLine('$ ', 'prompt'); $('terminal-input').focus(); }
+
+  function appendTerminalLine(text, type = 'output') {
+    const body = $('terminal-body');
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    if (type === 'prompt') { line.innerHTML = '<span class="terminal-prompt">$</span> ' + escapeHtml(text); }
+    else if (type === 'system') { line.style.color = 'var(--accent)'; line.textContent = text; }
+    else if (type === 'error') { line.style.color = 'var(--error)'; line.textContent = text; }
+    else { line.textContent = text; }
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  $('terminal-input').addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = e.target.value.trim();
+      e.target.value = '';
+      appendTerminalLine(cmd, 'prompt');
+      if (!cmd) { appendTerminalLine('$ ', 'prompt'); return; }
+      terminalHistory.push(cmd);
+      terminalHistory = terminalHistory.slice(-100);
+      $('term-status').textContent = 'Running...';
+      try {
+        const res = await api.terminalExec(currentProject.id, cmd, terminalCwd);
+        if (res.ok) { if (res.output) res.output.split('\n').forEach(l => appendTerminalLine(l)); if (res.cwd) terminalCwd = res.cwd; $('term-status').textContent = 'Ready'; }
+        else { appendTerminalLine(res.error || 'Command failed', 'error'); $('term-status').textContent = 'Error'; }
+      } catch (err) { appendTerminalLine('Connection error: ' + err.message, 'error'); $('term-status').textContent = 'Error'; }
+      appendTerminalLine('$ ', 'prompt');
+    }
+  });
+
+  // Git
+  async function loadGitStatus() { if (!currentProject) return; const statusEl = $('git-status'); statusEl.textContent = 'Loading...'; try { const res = await api.gitStatus(currentProject.id); if (res.ok) { statusEl.textContent = res.status || 'Working tree clean'; } else { statusEl.textContent = 'Error: ' + (res.error || 'Unknown'); } } catch (e) { statusEl.textContent = 'Connection error: ' + e.message; } }
+  $('git-status-refresh').addEventListener('click', loadGitStatus);
+
+  async function loadGitLog() { if (!currentProject) return; const logEl = $('git-log'); logEl.textContent = 'Loading...'; try { const res = await api.gitLog(currentProject.id); if (res.ok) { logEl.textContent = res.log || 'No commits'; } else { logEl.textContent = 'Error: ' + (res.error || 'Unknown'); } } catch (e) { logEl.textContent = 'Connection error: ' + e.message; } }
+  $('git-log-refresh').addEventListener('click', loadGitLog);
+
+  $('git-commit-btn').addEventListener('click', async () => { if (!currentProject) return; const msg = $('git-commit-msg').value.trim(); if (!msg) { showToast('Commit message required', 'warning'); return; } try { const res = await api.gitCommit(currentProject.id, msg); if (res.ok) { showToast('Committed successfully', 'success'); $('git-commit-msg').value = ''; loadGitStatus(); loadGitLog(); } else { showToast(res.error || 'Commit failed', 'error'); } } catch (e) { showToast('Connection error: ' + e.message, 'error'); } });
+
+  $('git-push-btn').addEventListener('click', async () => { if (!currentProject) return; try { const res = await api.gitPush(currentProject.id); if (res.ok) showToast('Pushed successfully', 'success'); else showToast(res.error || 'Push failed', 'error'); } catch (e) { showToast('Connection error: ' + e.message, 'error'); } });
+
+  $('git-pull-btn').addEventListener('click', async () => { if (!currentProject) return; try { const res = await api.gitPull(currentProject.id); if (res.ok) showToast('Pulled successfully', 'success'); else showToast(res.error || 'Pull failed', 'error'); } catch (e) { showToast('Connection error: ' + e.message, 'error'); } });
+
+  // Settings
+  function loadProjectSettings() { if (!currentProject) return; $('settings-name').textContent = currentProject.name || '-'; $('settings-path').textContent = currentProject.path || '-'; $('settings-remote').textContent = currentProject.git_remote || '-'; $('settings-branch').textContent = currentProject.branch || '-'; }
+
+  $('settings-refresh').addEventListener('click', async () => { if (!currentProject) return; try { const res = await api.getProject(currentProject.id); if (res.ok) { currentProject = res.project; loadProjectSettings(); showToast('Refreshed', 'success'); } } catch (e) { showToast('Connection error: ' + e.message, 'error'); } });
+
+  $('settings-delete').addEventListener('click', async () => { if (!currentProject) return; if (confirm('Delete this project? This cannot be undone.')) { await deleteProject(currentProject.id); } });
+
+  // Initial load
+  loadProjects();
+  document.querySelector('[data-tab="github-repos"]').addEventListener('click', loadGitHubRepos);
+})();
+</script>
+{% endblock %}

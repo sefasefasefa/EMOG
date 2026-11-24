@@ -1,0 +1,168 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+.ft-wrap{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.ft-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px}
+.ft-head h1{font-size:22px;font-weight:700;margin:0}
+.ft-head p{margin:2px 0 0;font-size:13px;opacity:.65}
+.ft-stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.ft-stat{border:1px solid rgba(127,127,127,.22);border-radius:10px;padding:9px 15px;font-size:12px}
+.ft-stat b{font-size:18px;display:block;line-height:1.1}
+.ft-stat.on b{color:#10b981}.ft-stat.off b{color:#f59e0b}.ft-stat.all b{color:#38bdf8}
+
+.ft-search{width:100%;padding:9px 12px;border-radius:9px;border:1px solid rgba(127,127,127,.3);
+  background:transparent;color:inherit;font-size:13px;margin-bottom:14px}
+.ft-group{border:1px solid rgba(127,127,127,.22);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.ft-group>h2{font-size:13px;font-weight:700;margin:0;padding:11px 15px;background:rgba(127,127,127,.1);
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ft-group>h2 span{font-size:11px;font-weight:400;opacity:.6}
+.ft-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 15px;
+  border-top:1px solid rgba(127,127,127,.1)}
+.ft-info{min-width:0;flex:1}
+.ft-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ft-desc{font-size:11px;opacity:.6;margin-top:2px}
+.ft-right{display:flex;align-items:center;gap:11px;flex-shrink:0}
+.tag{font-size:9.5px;padding:1.5px 6px;border-radius:99px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.tag.crit{background:#ef444422;color:#ef4444}
+.tag.chg{background:#f59e0b22;color:#f59e0b}
+.tag.dflt{background:rgba(127,127,127,.16);opacity:.65}
+.ft-meta{font-size:10px;opacity:.5;text-align:right;line-height:1.4}
+
+.sw{position:relative;display:inline-block;width:42px;height:23px;flex-shrink:0}
+.sw input{opacity:0;width:0;height:0}
+.sw .track{position:absolute;inset:0;background:rgba(127,127,127,.32);border-radius:99px;transition:.2s;cursor:pointer}
+.sw .track:before{content:"";position:absolute;height:17px;width:17px;left:3px;bottom:3px;background:#fff;
+  border-radius:50%;transition:.2s}
+.sw input:checked + .track{background:#10b981}
+.sw input:checked + .track:before{transform:translateX(19px)}
+.sw input:disabled + .track{opacity:.5;cursor:not-allowed}
+.sw input:focus-visible + .track{outline:2px solid #38bdf8;outline-offset:2px}
+
+.ft-bar{display:flex;gap:9px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.btn-act{padding:8px 15px;border-radius:9px;border:1px solid rgba(127,127,127,.3);background:transparent;
+  color:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.btn-act:hover{background:rgba(127,127,127,.1)}
+.btn-act.warn{border-color:#ef444455;color:#ef4444}
+.btn-act.warn:hover{background:#ef444418}
+.empty{opacity:.5;font-size:12px;padding:16px 0;text-align:center}
+</style>
+
+<div class="ft-wrap">
+  <div class="ft-head">
+    <div>
+      <h1>EMOG Özellik Anahtarları</h1>
+      <p>Özellikleri aç/kapa · Kapatılan özelliklerin bağlı olduğu URL'ler otomatik engellenir</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="{% url 'admin:index' %}" class="btn-act">Kullanım Paneli</a>
+      <a href="{% url 'admin:audit_auditlog_changelist' %}" class="btn-act">Denetim Kayıtları</a>
+    </div>
+    <form method="post" onsubmit="return confirm('Tüm özellikler varsayılan değerine dönsün mü?');">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reset">
+      <button type="submit" class="btn-act warn">Tümünü Varsayılana Döndür</button>
+    </form>
+  </div>
+
+  <div class="ft-stats">
+    <div class="ft-stat all"><b>{{ features.total }}</b>Toplam Özellik</div>
+    <div class="ft-stat on"><b>{{ features.active }}</b>Açık</div>
+    <div class="ft-stat off"><b>{{ features.disabled }}</b>Kapalı</div>
+  </div>
+
+  <div class="ft-bar">
+    <input type="search" id="ftSearch" class="ft-search" placeholder="Özellik ara... (ad veya açıklama)" style="flex:1;min-width:220px;margin:0">
+    <button type="button" class="btn-act" id="ftEnableAll">Tümünü Aç</button>
+    <button type="button" class="btn-act warn" id="ftNonCriticalOff">Sadece Kritik Olmayanları Kapat</button>
+  </div>
+
+  {% for group in features.groups %}
+  <div class="ft-group" data-group="{{ group.key }}">
+    <h2>{{ group.label }}
+      <span>{{ group.items|length }} özellik</span>
+    </h2>
+    {% for item in group.items %}
+    <div class="ft-row" data-key="{{ item.key }}"
+         data-name="{{ item.label|lower }} {{ item.description|lower }}"
+         data-critical="{{ item.critical|yesno:'1,0' }}"
+         data-changed="{{ item.changed|yesno:'1,0' }}">
+      <div class="ft-info">
+        <div class="ft-name">
+          {{ item.label }}
+          {% if item.critical %}<span class="tag crit">Kritik</span>{% endif %}
+          {% if item.changed %}<span class="tag chg">Varsayılan değil</span>
+          {% else %}<span class="tag dflt">Varsayılan</span>{% endif %}
+        </div>
+        <div class="ft-desc">{{ item.description }}{% if item.paths %} &middot; <span class="mono">{{ item.paths|join:", " }}</span>{% endif %}</div>
+      </div>
+      <div class="ft-right">
+        {% if item.disabled_at %}
+        <div class="ft-meta">Kapanış: {{ item.disabled_at|date:"d.m.Y H:i" }}{% if item.disabled_by %}<br>{{ item.disabled_by }}{% endif %}</div>
+        {% endif %}
+        <form method="post" class="ft-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="toggle">
+          <input type="hidden" name="key" value="{{ item.key }}">
+          <input type="hidden" name="enabled" value="{% if item.enabled %}0{% else %}1{% endif %}">
+          <label class="sw">
+            <input type="checkbox" class="ft-toggle" {% if item.enabled %}checked{% endif %}
+                   {% if item.critical and item.enabled %}data-critical="1"{% endif %}>
+            <span class="track"></span>
+          </label>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+document.getElementById('ftSearch').addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  document.querySelectorAll('.ft-row').forEach(function(row) {
+    row.style.display = !q || row.dataset.name.indexOf(q) !== -1 ? '' : 'none';
+  });
+});
+
+document.getElementById('ftEnableAll').addEventListener('click', function() {
+  if (!confirm('Tüm özellikler açılsın mı?')) return;
+  document.querySelectorAll('.ft-row').forEach(function(row) {
+    const cb = row.querySelector('.ft-toggle');
+    if (!cb.checked) {
+      row.querySelector('input[name="enabled"]').value = '1';
+      row.querySelector('.ft-form').submit();
+    }
+  });
+});
+
+document.getElementById('ftNonCriticalOff').addEventListener('click', function() {
+  if (!confirm('Kritik olmayan tüm özellikler kapatılsın mı?')) return;
+  document.querySelectorAll('.ft-row').forEach(function(row) {
+    const cb = row.querySelector('.ft-toggle');
+    if (row.dataset.critical === '1') return;
+    if (cb.checked) {
+      row.querySelector('input[name="enabled"]').value = '0';
+      row.querySelector('.ft-form').submit();
+    }
+  });
+});
+
+document.querySelectorAll('.ft-toggle').forEach(function(cb) {
+  cb.addEventListener('change', function() {
+    if (this.dataset.critical === '1' && !this.checked) {
+      const name = this.closest('.ft-row').querySelector('.ft-name').childNodes[0].textContent.trim();
+      if (!confirm('"' + name + '" kritik bir özelliktir. Kapatmak istediğinize emin misiniz?')) {
+        this.checked = true;
+        return;
+      }
+    }
+    const form = this.closest('.ft-form');
+    form.querySelector('input[name="enabled"]').value = this.checked ? '1' : '0';
+    form.submit();
+  });
+});
+</script>
+{% endblock %}

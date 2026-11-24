@@ -1,0 +1,530 @@
+{% extends "agent_app/base.html" %}
+{% load static %}
+
+{% block title %}NEURAL CORE - EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .nc-wrap{max-width:1240px;margin:0 auto;padding:20px 16px 56px}
+  .nc-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .nc-header h1{margin:0 0 6px;font-size:1.55rem;letter-spacing:.02em}
+  .nc-header p{margin:0;color:var(--fg-muted);font-size:.9rem;line-height:1.55;max-width:640px}
+  .nc-badges{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .nc-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:var(--card);font-size:.76rem;color:var(--fg-muted)}
+  .nc-dot{width:8px;height:8px;border-radius:50%;background:var(--success)}
+  .nc-dot.off{background:var(--warning)}
+  .nc-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.75fr);gap:16px}
+  @media(max-width:980px){.nc-grid{grid-template-columns:1fr}}
+  .nc-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .nc-card h2{margin:0 0 4px;font-size:.98rem}
+  .nc-card .nc-muted{color:var(--fg-muted);font-size:.8rem;line-height:1.5;margin:0 0 12px}
+  .nc-form{display:flex;flex-direction:column;gap:10px}
+  .nc-form textarea{width:100%;min-height:104px;resize:vertical;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--fg);padding:12px;font:inherit;font-size:.92rem}
+  .nc-form textarea:focus, .nc-form input:focus, .nc-form select:focus{outline:2px solid var(--accent-border);border-color:var(--accent)}
+  .nc-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .nc-row select, .nc-row input{background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--fg);padding:9px 10px;font:inherit;font-size:.85rem;min-width:0}
+  .nc-row input[type=text]{flex:1 1 220px}
+  .nc-row input[type=number]{width:100px}
+  .nc-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  @media(max-width:640px){.nc-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .nc-stat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px}
+  .nc-stat b{display:block;font-size:1.15rem;line-height:1.2}
+  .nc-stat span{font-size:.72rem;color:var(--fg-muted)}
+  .nc-empty{color:var(--fg-subtle);font-size:.8rem;padding:8px 0}
+  .nc-step{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+  .nc-step:last-child{border-bottom:none}
+  .nc-step-no{flex:0 0 24px;height:24px;border-radius:50%;background:var(--accent-bg);color:var(--accent-light);display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700}
+  .nc-step b{font-size:.84rem;display:block}
+  .nc-step p{margin:2px 0 0;color:var(--fg-muted);font-size:.78rem;line-height:1.45}
+  .nc-alt{border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--bg)}
+  .nc-alt-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .nc-alt b{font-size:.85rem}
+  .nc-score{font-size:.72rem;color:var(--accent-light);border:1px solid var(--accent-border);background:var(--accent-bg);border-radius:999px;padding:2px 8px}
+  .nc-alt p{margin:5px 0;color:var(--fg-muted);font-size:.78rem;line-height:1.45}
+  .nc-alt ul{margin:4px 0 0 16px;padding:0;color:var(--fg-muted);font-size:.75rem;line-height:1.5}
+  .nc-finding{padding:8px 0;border-bottom:1px solid var(--border);font-size:.8rem}
+  .nc-finding:last-child{border-bottom:none}
+  .nc-finding a{color:var(--accent-light);text-decoration:none}
+  .nc-finding span{display:block;color:var(--fg-muted);font-size:.75rem;margin-top:2px}
+  .nc-pill{display:inline-block;font-size:.7rem;padding:2px 7px;border-radius:999px;border:1px solid var(--border);color:var(--fg-muted);margin-left:6px}
+  .nc-pill.ok{border-color:rgba(34,197,94,.35);color:#4ade80;background:rgba(34,197,94,.08)}
+  .nc-pill.warn{border-color:rgba(245,158,11,.35);color:#fbbf24;background:rgba(245,158,11,.08)}
+  .nc-pill.err{border-color:rgba(239,68,68,.35);color:#f87171;background:rgba(239,68,68,.08)}
+  .nc-list{display:flex;flex-direction:column;gap:8px}
+  .nc-item{border:1px solid var(--border);border-radius:10px;padding:9px 10px;background:var(--bg);font-size:.8rem}
+  .nc-item-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .nc-item p{margin:4px 0 0;color:var(--fg-muted);font-size:.75rem;line-height:1.45;word-break:break-word}
+  .nc-item .nc-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .nc-mini{font-size:.72rem;padding:5px 8px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--fg);cursor:pointer}
+  .nc-mini.primary{border-color:var(--accent-border);background:var(--accent-bg);color:var(--accent-light)}
+  .nc-mini.danger{border-color:rgba(239,68,68,.35);color:#f87171}
+  .nc-tools{display:grid;gap:10px}
+  .nc-tool-block{border:1px dashed var(--border);border-radius:10px;padding:10px}
+  .nc-tool-block h3{margin:0 0 6px;font-size:.8rem;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.05em}
+  .nc-tool-block textarea{width:100%;min-height:62px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--fg);padding:8px;font:inherit;font-size:.78rem;resize:vertical}
+  .nc-output{margin-top:10px;padding:10px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-family:var(--font-mono);font-size:.75rem;white-space:pre-wrap;max-height:260px;overflow:auto;display:none}
+  .nc-toastline{font-size:.78rem;color:var(--fg-muted);min-height:1.1em;margin-top:8px}
+  details.nc-details summary{cursor:pointer;font-size:.8rem;color:var(--fg-muted);padding:4px 0}
+  .nc-hint{font-size:.72rem;color:var(--fg-subtle);line-height:1.5}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="nc-wrap" id="neural-page">
+  <header class="nc-header">
+    <div>
+      <h1>NEURAL CORE</h1>
+      <p>Planla, alternatif üret, araştır, değerlendir ve deneyimden öğren. Tüm yetenekler EMOG oturumu, izinler ve denetim altında çalışır.</p>
+    </div>
+    <div class="nc-badges">
+      <span class="nc-badge"><span id="nc-provider-dot" class="nc-dot {% if neural_offline %}off{% endif %}"></span><span id="nc-provider-label">{% if neural_offline %}Çevrimdışı mod{% elif neural_active_provider %}{{ neural_active_provider }}{% else %}Sağlayıcı yok{% endif %}</span></span>
+      <a class="nc-badge" href="/chat/">EMOG'a dön</a>
+    </div>
+  </header>
+
+  <div class="nc-grid">
+    <div>
+      <section class="nc-card">
+        <h2>Yeni Çalıştırma</h2>
+        <p class="nc-muted">Hedefi yaz, modu seç. Çekirdek planı kurar; tam/keşif modunda alternatifleri, tam/araştırma modunda kaynakları toplar.</p>
+        <form id="neural-run-form" class="nc-form" data-max-chars="{{ neural_max_goal_chars }}">
+          {% csrf_token %}
+          <textarea id="neural-goal" name="goal" maxlength="{{ neural_max_goal_chars }}" placeholder="Örnek: Küçük bir ekip için görev takip API'si tasarla ve test stratejisini kur." required></textarea>
+          <div class="nc-row">
+            <select id="neural-mode" name="mode">
+              {% for key, label in neural_modes %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+            </select>
+            <button type="submit" id="neural-run-submit" class="btn btn-primary">Çalıştır</button>
+            <span id="nc-run-status" class="nc-hint"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="nc-card" id="nc-result-card">
+        <div class="nc-row" style="justify-content:space-between;">
+          <div>
+            <h2 id="nc-run-title">Sonuç</h2>
+            <p class="nc-muted" id="nc-run-subtitle">Henüz bir çalıştırma seçilmedi. Yukarıdan yeni bir çalıştırma başlat veya geçmişten seç.</p>
+          </div>
+          <span id="nc-run-badge" class="nc-pill">bekliyor</span>
+        </div>
+        <div id="nc-run-body">
+          <div class="nc-empty">Plan, alternatifler, araştırma ve değerlendirme burada görünecek.</div>
+        </div>
+      </section>
+
+      <section class="nc-card">
+        <h2>Geçmiş Çalıştırmalar</h2>
+        <div class="nc-list" id="nc-runs-list">
+          {% for run in neural_runs %}
+          <div class="nc-item">
+            <div class="nc-item-head">
+              <b>{{ run.goal|truncatechars:90 }}</b>
+              <span class="nc-pill {% if run.status == 'completed' %}ok{% elif run.status == 'failed' %}err{% else %}warn{% endif %}">{{ run.status }}</span>
+            </div>
+            <p>{{ run.mode }} · {% if run.evaluation.score %}puan {{ run.evaluation.score }}{% else %}değerlendirme yok{% endif %} · {{ run.created_at|slice:":16" }}</p>
+            <div class="nc-actions"><button type="button" class="nc-mini" data-run-id="{{ run.id }}">Aç</button></div>
+          </div>
+          {% empty %}
+          <div class="nc-empty">Henüz çalıştırma yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <aside>
+      <section class="nc-card">
+        <h2>Durum</h2>
+        <div class="nc-stat-grid">
+          <div class="nc-stat"><b id="nc-stat-runs">{{ neural_stats.count|default:0 }}</b><span>deneyim</span></div>
+          <div class="nc-stat"><b id="nc-stat-score">{{ neural_stats.average|default:0 }}</b><span>ort. puan</span></div>
+          <div class="nc-stat"><b id="nc-stat-proposals">{{ neural_proposals|length }}</b><span>öneri</span></div>
+          <div class="nc-stat"><b id="nc-stat-goals">{{ neural_goals|length }}</b><span>otonom hedef</span></div>
+        </div>
+        <p class="nc-hint" id="nc-status-line" style="margin-top:10px;">Durum yükleniyor...</p>
+      </section>
+
+      <section class="nc-card">
+        <h2>Kişisel Tercihler</h2>
+        <p class="nc-muted">Dil, ton, teknoloji ve araştırma tercihleri sonraki çalıştırmalara taşınır.</p>
+        <div class="nc-row" style="margin-bottom:10px;">
+          <input type="text" id="nc-pref-key" placeholder="anahtar (örn. language)">
+          <input type="text" id="nc-pref-value" placeholder="değer (örn. tr)">
+          <button type="button" class="nc-mini primary" id="nc-pref-save">Kaydet</button>
+        </div>
+        <div class="nc-list" id="nc-prefs-list">
+          {% for pref in neural_preferences %}
+          <div class="nc-item"><b>{{ pref.key }}</b><p>{{ pref.value }}</p></div>
+          {% empty %}
+          <div class="nc-empty">Henüz tercih yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="nc-card">
+        <h2>Kendini Geliştirme Önerileri</h2>
+        <p class="nc-muted">Yalnızca güvenli politika anahtarları önerilir; onay olmadan uygulanmaz.</p>
+        <button type="button" class="nc-mini primary" id="nc-propose-btn">Yeni öneri üret</button>
+        <div class="nc-list" id="nc-proposals-list" style="margin-top:10px;">
+          {% for proposal in neural_proposals %}
+          <div class="nc-item" data-proposal-id="{{ proposal.id }}">
+            <div class="nc-item-head"><b>{{ proposal.title }}</b><span class="nc-pill warn">{{ proposal.risk }}</span></div>
+            <p>{{ proposal.rationale|truncatechars:180 }}</p>
+            <p><code>{{ proposal.changes }}</code></p>
+            <div class="nc-actions">
+              <button type="button" class="nc-mini primary" data-proposal-action="apply" data-proposal-id="{{ proposal.id }}">Uygula</button>
+              <button type="button" class="nc-mini danger" data-proposal-action="reject" data-proposal-id="{{ proposal.id }}">Reddet</button>
+            </div>
+          </div>
+          {% empty %}
+          <div class="nc-empty">Bekleyen öneri yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="nc-card">
+        <h2>Otonom Hedefler</h2>
+        <p class="nc-muted">Zamanı gelen hedefler <code>manage.py neural_cycle</code> ile çalışır. En kısa aralık 15 dakikadır.</p>
+        <div class="nc-form" style="gap:8px;">
+          <div class="nc-row">
+            <input type="text" id="nc-goal-title" placeholder="Hedef başlığı">
+            <input type="number" id="nc-goal-interval" value="60" min="15" title="dakika">
+            <button type="button" class="nc-mini primary" id="nc-goal-add">Ekle</button>
+          </div>
+        </div>
+        <div class="nc-list" id="nc-goals-list" style="margin-top:10px;">
+          {% for goal in neural_goals %}
+          <div class="nc-item" data-goal-id="{{ goal.id }}">
+            <div class="nc-item-head"><b>{{ goal.title|truncatechars:60 }}</b><span class="nc-pill {% if goal.enabled %}ok{% else %}warn{% endif %}">{% if goal.enabled %}açık{% else %}kapalı{% endif %}</span></div>
+            <p>{{ goal.mode }} · her {{ goal.interval_minutes }} dk · sonraki {{ goal.next_run_at|slice:":16"|default:"-" }}</p>
+            <div class="nc-actions"><button type="button" class="nc-mini" data-goal-toggle="{{ goal.id }}">{% if goal.enabled %}Durdur{% else %}Başlat{% endif %}</button></div>
+          </div>
+          {% empty %}
+          <div class="nc-empty">Otonom hedef yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="nc-card">
+        <h2>Bilgisayar Araçları</h2>
+        <p class="nc-muted">Dosya ve komut işlemleri yalnızca <code>projects/</code> ve <code>task_runs/</code> altında, onayla çalışır.</p>
+        <div class="nc-tools">
+          <div class="nc-tool-block">
+            <h3>Dosya Oku</h3>
+            <div class="nc-row"><input type="text" id="nc-tool-read-path" placeholder="task_runs/ornek.txt"><button type="button" class="nc-mini" id="nc-tool-read">Oku</button></div>
+          </div>
+          <div class="nc-tool-block">
+            <h3>Dosya Yaz (onay ister)</h3>
+            <div class="nc-row" style="margin-bottom:6px;"><input type="text" id="nc-tool-write-path" placeholder="task_runs/notlar.txt"></div>
+            <textarea id="nc-tool-write-content" placeholder="Yazılacak içerik"></textarea>
+            <div class="nc-row" style="margin-top:6px;"><button type="button" class="nc-mini primary" id="nc-tool-write">Onay talebi oluştur</button></div>
+          </div>
+          <div class="nc-tool-block">
+            <h3>Komut Çalıştır (onay ister)</h3>
+            <div class="nc-row"><input type="text" id="nc-tool-command" placeholder="python --version"><button type="button" class="nc-mini primary" id="nc-tool-command-btn">Onay talebi oluştur</button></div>
+            <p class="nc-hint">Yalnızca beyaz listedeki komutlar; 30 saniye zaman aşımı.</p>
+          </div>
+        </div>
+        <pre class="nc-output" id="nc-tool-output"></pre>
+        <h2 style="margin-top:14px;font-size:.85rem;">Onay Kuyruğu</h2>
+        <div class="nc-list" id="nc-approvals-list">
+          {% for approval in neural_approvals %}
+          <div class="nc-item" data-approval-id="{{ approval.id }}">
+            <div class="nc-item-head"><b>{{ approval.tool }}</b><span class="nc-pill warn">onay bekliyor</span></div>
+            <p>{{ approval.args }}</p>
+            <div class="nc-actions">
+              <button type="button" class="nc-mini primary" data-approval-action="approve" data-approval-id="{{ approval.id }}">Onayla</button>
+              <button type="button" class="nc-mini danger" data-approval-action="reject" data-approval-id="{{ approval.id }}">Reddet</button>
+            </div>
+          </div>
+          {% empty %}
+          <div class="nc-empty">Bekleyen onay yok.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const escapeHtml = (value) => {
+    const div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  };
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function safeUrl(value) {
+    try {
+      const url = new URL(String(value || ''), window.location.origin);
+      return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+    } catch (error) {
+      return '';
+    }
+  }
+  const csrfToken = () => {
+    const input = document.querySelector('#neural-run-form input[name="csrfmiddlewaretoken"]');
+    if (input && input.value) return input.value;
+    const match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+  async function api(path, options = {}) {
+    const method = options.method || 'GET';
+    const headers = { 'Accept': 'application/json' };
+    if (method !== 'GET') {
+      headers['Content-Type'] = 'application/json';
+      headers['X-CSRFToken'] = csrfToken();
+    }
+    const response = await fetch(path, {
+      method,
+      credentials: 'same-origin',
+      headers,
+      body: options.body ? JSON.stringify(options.body) : null
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) { data = {}; }
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || ('HTTP ' + response.status));
+    }
+    return data;
+  }
+  const toast = (message, type) => {
+    if (window.APP && window.APP.toast) window.APP.toast(message, type || 'info');
+  };
+  const statusPill = (status) => {
+    const cls = status === 'completed' ? 'ok' : status === 'failed' ? 'err' : 'warn';
+    return '<span class="nc-pill ' + cls + '">' + escapeHtml(status) + '</span>';
+  };
+
+  function renderRun(run) {
+    if (!run) return;
+    $('nc-run-title').textContent = run.goal;
+    $('nc-run-subtitle').textContent = run.mode + ' modu · ' + (run.provider || 'çevrimdışı') + ' · ' + (run.created_at || '').slice(0, 16);
+    $('nc-run-badge').outerHTML = statusPill(run.status).replace('class="nc-pill', 'id="nc-run-badge" class="nc-pill');
+    let html = '';
+    if (run.error) {
+      html += '<div class="nc-item"><b>Hata</b><p>' + escapeHtml(run.error) + '</p></div>';
+    }
+    if (run.evaluation && run.evaluation.score != null) {
+      html += '<p><b>Puan:</b> ' + escapeHtml(run.evaluation.score) + ' / 100 · ' + escapeHtml(run.evaluation.verdict || '') + '</p>';
+    }
+    if (run.plan && run.plan.length) {
+      html += '<h2 style="margin-top:14px;font-size:.9rem;">Plan</h2>';
+      run.plan.forEach((step, index) => {
+        html += '<div class="nc-step"><div class="nc-step-no">' + (index + 1) + '</div><div><b>' + escapeHtml(step.title) + '</b><p>' + escapeHtml(step.detail || '') + '</p></div></div>';
+      });
+    }
+    if (run.alternatives && run.alternatives.length) {
+      html += '<h2 style="margin-top:14px;font-size:.9rem;">Alternatifler</h2>';
+      run.alternatives.forEach((alt) => {
+        html += '<div class="nc-alt"><div class="nc-alt-head"><b>' + escapeHtml(alt.name) + '</b><span class="nc-score">' + escapeHtml(alt.score) + '</span></div><p>' + escapeHtml(alt.summary || '') + '</p>';
+        if (alt.pros && alt.pros.length) html += '<ul>' + alt.pros.map((item) => '<li>+' + escapeHtml(item) + '</li>').join('') + '</ul>';
+        if (alt.cons && alt.cons.length) html += '<ul>' + alt.cons.map((item) => '<li>−' + escapeHtml(item) + '</li>').join('') + '</ul>';
+        html += '</div>';
+      });
+    }
+    if (run.research && run.research.summary) {
+      html += '<h2 style="margin-top:14px;font-size:.9rem;">Araştırma</h2><p class="nc-muted">' + escapeHtml(run.research.summary) + '</p>';
+      (run.research.findings || []).slice(0, 12).forEach((finding) => {
+        const href = escapeAttr(safeUrl(finding.url));
+        html += '<div class="nc-finding">' + (href ? '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(finding.title) + '</a>' : '<b>' + escapeHtml(finding.title) + '</b>') + '<span>' + escapeHtml(finding.snippet || '') + '</span></div>';
+      });
+    }
+    if (run.result) {
+      const next = run.result.next_steps || [];
+      const lessons = run.result.lessons || [];
+      if (next.length || lessons.length) {
+        html += '<h2 style="margin-top:14px;font-size:.9rem;">Özet</h2><p class="nc-muted">' + escapeHtml(run.result.summary || '') + '</p>';
+        if (next.length) html += '<p class="nc-hint"><b>Sonraki adımlar:</b> ' + next.map(escapeHtml).join(' → ') + '</p>';
+        if (lessons.length) html += '<p class="nc-hint"><b>Dersler:</b> ' + lessons.map(escapeHtml).join(' · ') + '</p>';
+      }
+    }
+    if (run.evaluation && run.evaluation.gaps && run.evaluation.gaps.length) {
+      html += '<p class="nc-hint"><b>Boşluklar:</b> ' + run.evaluation.gaps.map(escapeHtml).join(' · ') + '</p>';
+    }
+    $('nc-run-body').innerHTML = html || '<div class="nc-empty">Sonuç yok.</div>';
+  }
+
+  async function openRun(runId) {
+    try {
+      const data = await api('/api/neural/run/' + encodeURIComponent(runId) + '/');
+      renderRun(data.run);
+      if (data.run.status === 'pending' || data.run.status === 'running') {
+        $('nc-run-status').textContent = 'Çalışıyor...';
+        setTimeout(() => openRun(runId), 1500);
+      } else {
+        $('nc-run-status').textContent = '';
+        refreshStatus();
+        refreshRuns();
+      }
+    } catch (error) {
+      toast(error.message, 'error');
+    }
+  }
+
+  async function refreshRuns() {
+    try {
+      const data = await api('/api/neural/runs/');
+      const list = $('nc-runs-list');
+      if (!data.runs.length) { list.innerHTML = '<div class="nc-empty">Henüz çalıştırma yok.</div>'; return; }
+      list.innerHTML = data.runs.map((run) => '<div class="nc-item"><div class="nc-item-head"><b>' + escapeHtml(run.goal.slice(0, 90)) + '</b>' + statusPill(run.status) + '</div><p>' + escapeHtml(run.mode) + ' · ' + (run.evaluation && run.evaluation.score != null ? 'puan ' + escapeHtml(run.evaluation.score) : 'değerlendirme yok') + ' · ' + escapeHtml((run.created_at || '').slice(0, 16)) + '</p><div class="nc-actions"><button type="button" class="nc-mini" data-run-id="' + escapeAttr(run.id) + '">Aç</button></div></div>').join('');
+    } catch (error) { /* durum çubuğu yeterli */ }
+  }
+
+  async function refreshStatus() {
+    try {
+      const data = await api('/api/neural/status/');
+      $('nc-stat-runs').textContent = data.experiences || 0;
+      $('nc-stat-score').textContent = (data.stats && data.stats.average) || 0;
+      $('nc-stat-proposals').textContent = data.proposals_pending || 0;
+      $('nc-stat-goals').textContent = data.goals_enabled || 0;
+      $('nc-provider-dot').classList.toggle('off', !!data.offline);
+      $('nc-provider-label').textContent = data.offline ? 'Çevrimdışı mod' : (data.active_provider || 'Sağlayıcı yok');
+      $('nc-status-line').textContent = data.offline
+        ? 'Ağ yok: deterministik plan, keşif ve araştırma şablonları kullanılıyor.'
+        : 'Aktif sağlayıcı: ' + (data.active_provider || 'yok') + ' · ' + data.providers.join(', ');
+    } catch (error) {
+      $('nc-status-line').textContent = 'Durum alınamadı: ' + error.message;
+    }
+  }
+
+  $('neural-run-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const goal = $('neural-goal').value.trim();
+    if (!goal) { toast('Hedef yazın.', 'error'); return; }
+    const button = $('neural-run-submit');
+    button.disabled = true;
+    $('nc-run-status').textContent = 'Başlatılıyor...';
+    try {
+      const data = await api('/api/neural/run/', { method: 'POST', body: { goal, mode: $('neural-mode').value } });
+      renderRun(data.run);
+      $('nc-run-status').textContent = '';
+      if (data.run.status === 'pending' || data.run.status === 'running') {
+        setTimeout(() => openRun(data.run.id), 800);
+      } else {
+        refreshStatus(); refreshRuns();
+      }
+    } catch (error) {
+      toast(error.message, 'error');
+      $('nc-run-status').textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const runButton = event.target.closest('[data-run-id]');
+    if (runButton) { openRun(runButton.getAttribute('data-run-id')); return; }
+  });
+
+  $('nc-pref-save').addEventListener('click', async () => {
+    const key = $('nc-pref-key').value.trim();
+    const value = $('nc-pref-value').value;
+    if (!key) { toast('Anahtar gerekli.', 'error'); return; }
+    try {
+      await api('/api/neural/preferences/', { method: 'POST', body: { key, value } });
+      $('nc-pref-key').value = ''; $('nc-pref-value').value = '';
+      toast('Tercih kaydedildi.', 'success');
+      const listed = await api('/api/neural/preferences/');
+      $('nc-prefs-list').innerHTML = listed.preferences.length
+        ? listed.preferences.map((item) => '<div class="nc-item"><b>' + escapeHtml(item.key) + '</b><p>' + escapeHtml(JSON.stringify(item.value)) + '</p></div>').join('')
+        : '<div class="nc-empty">Henüz tercih yok.</div>';
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  $('nc-propose-btn').addEventListener('click', async () => {
+    try {
+      const data = await api('/api/neural/proposals/', { method: 'POST', body: {} });
+      toast(data.created.length ? data.created.length + ' öneri üretildi.' : 'Yeni öneri yok.', 'info');
+      await loadProposals();
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  async function loadProposals() {
+    const data = await api('/api/neural/proposals/');
+    const pending = data.proposals.filter((item) => item.status === 'pending');
+    $('nc-proposals-list').innerHTML = pending.length ? pending.map((proposal) => '<div class="nc-item"><div class="nc-item-head"><b>' + escapeHtml(proposal.title) + '</b><span class="nc-pill warn">' + escapeHtml(proposal.risk) + '</span></div><p>' + escapeHtml(proposal.rationale) + '</p><p><code>' + escapeHtml(JSON.stringify(proposal.changes)) + '</code></p><div class="nc-actions"><button type="button" class="nc-mini primary" data-proposal-action="apply" data-proposal-id="' + escapeAttr(proposal.id) + '">Uygula</button><button type="button" class="nc-mini danger" data-proposal-action="reject" data-proposal-id="' + escapeAttr(proposal.id) + '">Reddet</button></div></div>').join('') : '<div class="nc-empty">Bekleyen öneri yok.</div>';
+  }
+
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-proposal-action]');
+    if (!button) return;
+    const id = button.getAttribute('data-proposal-id');
+    const action = button.getAttribute('data-proposal-action');
+    try {
+      const data = await api('/api/neural/proposals/' + encodeURIComponent(id) + '/' + action + '/', { method: 'POST', body: {} });
+      toast(data.message || 'Tamam.', 'success');
+      await loadProposals(); refreshStatus();
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  $('nc-goal-add').addEventListener('click', async () => {
+    const title = $('nc-goal-title').value.trim();
+    if (!title) { toast('Hedef başlığı gerekli.', 'error'); return; }
+    try {
+      await api('/api/neural/goals/', { method: 'POST', body: { title, mode: 'research', interval_minutes: Number($('nc-goal-interval').value) || 60 } });
+      $('nc-goal-title').value = '';
+      toast('Otonom hedef eklendi.', 'success');
+      location.reload();
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-goal-toggle]');
+    if (!button) return;
+    try {
+      await api('/api/neural/goals/' + encodeURIComponent(button.getAttribute('data-goal-toggle')) + '/toggle/', { method: 'POST', body: {} });
+      location.reload();
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  const showToolOutput = (text) => {
+    const output = $('nc-tool-output');
+    output.style.display = 'block';
+    output.textContent = text;
+  };
+
+  $('nc-tool-read').addEventListener('click', async () => {
+    try {
+      const data = await api('/api/neural/tools/read/', { method: 'POST', body: { path: $('nc-tool-read-path').value.trim() } });
+      showToolOutput(data.result.content);
+    } catch (error) { showToolOutput('Hata: ' + error.message); }
+  });
+
+  $('nc-tool-write').addEventListener('click', async () => {
+    try {
+      const data = await api('/api/neural/tools/write/', { method: 'POST', body: { path: $('nc-tool-write-path').value.trim(), content: $('nc-tool-write-content').value } });
+      showToolOutput('Onay talebi oluşturuldu: ' + data.approval.id + '\nDurum: ' + data.approval.status);
+      toast('Onay talebi oluşturuldu.', 'info');
+    } catch (error) { showToolOutput('Hata: ' + error.message); }
+  });
+
+  $('nc-tool-command-btn').addEventListener('click', async () => {
+    try {
+      const data = await api('/api/neural/tools/command/', { method: 'POST', body: { command: $('nc-tool-command').value.trim() } });
+      showToolOutput('Onay talebi oluşturuldu: ' + data.approval.id + '\nDurum: ' + data.approval.status);
+      toast('Komut onayı bekliyor.', 'info');
+    } catch (error) { showToolOutput('Hata: ' + error.message); }
+  });
+
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-approval-action]');
+    if (!button) return;
+    const approve = button.getAttribute('data-approval-action') === 'approve';
+    try {
+      const data = await api('/api/neural/tools/approvals/' + encodeURIComponent(button.getAttribute('data-approval-id')) + '/decide/', { method: 'POST', body: { approve } });
+      showToolOutput(data.output || data.status);
+      toast(approve ? 'İşlem onaylandı.' : 'İşlem reddedildi.', approve ? 'success' : 'info');
+      setTimeout(() => location.reload(), 700);
+    } catch (error) { toast(error.message, 'error'); }
+  });
+
+  refreshStatus();
+})();
+</script>
+{% endblock %}

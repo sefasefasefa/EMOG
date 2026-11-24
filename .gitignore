@@ -14,3 +14,65 @@ dist/
 .DS_Store
 node_modules/
 .venv/
+staticfiles/
+
+# --- Geçici / paket / önbellek dosyalari (GitHub'a gitmesin) ---
+.pnpm-store/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+*.swp
+*.tsbuildinfo
+*.py[cod]
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Derleme ciktilari
+artifacts/
+dist/
+build/
+out/
+
+# Veritabani ve yedekler
+*.sqlite3
+*.db
+*.backup*
+*-backup/
+*.pre-migration-backup
+
+# Arac / editor ozel dosyalari
+.aider.*
+.aiderignore
+.superpowers/
+
+# Guvenlik / model artifact'lari
+admin-2fa-qr.png
+*.pt
+*.onnx
+*.pth
+.idea/
+.DS_Store
+
+# Calisma zamanı verileri
+*.log
+logs/
+audit_logs/
+approvals/
+media/
+uploads/
+
+# Hata ayiklama ciktilari
+output*.txt
+output*.json
+discovery_*.txt
+gen_hyp_*.txt
+int_test*.txt
+ds.txt
+vision_test.txt
+_qa_out3.json
+run_task_output.json

@@ -1,0 +1,58 @@
+{
+  "version": "0.1.0",
+  "profile": "automation_assistant",
+  "permissions": {
+    "computer_control": true,
+    "screen_recording": false,
+    "allowed_paths": [
+      "~/.emog/data",
+      "~/.emog/downloads",
+      "~/.emog/workspace"
+    ]
+  },
+  "browser": {
+    "headless": false,
+    "default_timeout": 30000,
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "research": {
+    "default_max_results": 10,
+    "sources": ["web", "semantic_scholar", "arxiv", "pubmed", "crossref"],
+    "default_depth": 3
+  },
+  "api_keys": {
+    "openai": "",
+    "anthropic": "",
+    "google": "",
+    "github": "",
+    "semantic_scholar": "",
+    "serpapi": "",
+    "bing": ""
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "~/.emog/logs/emog.log",
+    "max_size_mb": 10,
+    "backup_count": 5
+  },
+  "agents": {
+    "research_agent": {
+      "enabled": true,
+      "timeout": 300,
+      "max_concurrent": 3
+    },
+    "computer_control_agent": {
+      "enabled": true,
+      "timeout": 60,
+      "safe_mode": true,
+      "confirm_destructive": true
+    }
+  },
+  "mcp": {
+    "enabled": false,
+    "servers": []
+  }
+}

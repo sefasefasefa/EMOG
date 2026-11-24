@@ -1,0 +1,18 @@
+{% extends 'agent_app/base.html' %}
+
+{% block title %}{{ page.title }} — EMOG{% endblock %}
+
+{% block content %}
+<div style="max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem;">
+  <a href="/" class="btn btn-ghost btn-sm" style="margin-bottom: 1.5rem;">&larr; Geri</a>
+  <h1 style="font-size: 1.75rem; font-weight: 700; margin: 0 0 0.5rem;">{{ page.title }}</h1>
+  <p style="color: var(--fg-muted); margin: 0 0 2rem;">Son güncelleme: {{ page.updated }}</p>
+
+  {% for section in page.sections %}
+  <section style="margin-bottom: 2rem;">
+    <h2 style="font-size: 1.1rem; font-weight: 600; margin: 0 0 0.5rem;">{{ section.heading }}</h2>
+    <p style="color: var(--fg-muted); line-height: 1.7; margin: 0;">{{ section.body }}</p>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}

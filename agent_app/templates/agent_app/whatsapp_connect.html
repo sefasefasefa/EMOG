@@ -1,0 +1,349 @@
+{% extends "agent_app/base.html" %}
+{% load static %}
+
+{% block title %}WhatsApp Bağlantısı - EMOG{% endblock %}
+
+{% block head %}
+<style>
+  .wa-connect-wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  .wa-connect-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:20px; }
+  .wa-connect-header h1 { margin:0 0 6px; font-size:1.5rem; }
+  .wa-connect-header p { margin:0; color:var(--fg-muted); font-size:.92rem; }
+  .wa-connect-grid { display:grid; grid-template-columns:1fr; gap:16px; }
+  @media (min-width: 840px) { .wa-connect-grid { grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr); } }
+  .wa-panel { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; }
+  .wa-panel h2 { margin:0 0 4px; font-size:1rem; }
+  .wa-panel .muted { color:var(--fg-muted); font-size:.82rem; line-height:1.5; }
+  .wa-status { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-md); font-size:.85rem; }
+  .wa-dot { width:9px; height:9px; border-radius:50%; background:var(--fg-muted); }
+  .wa-dot.connected { background:var(--success); }
+  .wa-dot.waiting { background:var(--warning); }
+  .wa-dot.lost { background:var(--error); }
+  .wa-session-text.lost { color:var(--error); font-weight:600; }
+  .wa-lost-notice { display:none; margin-top:10px; padding:10px 12px; border:1px solid var(--error); border-radius:var(--radius-md); background:var(--error-bg, rgba(239,68,68,.08)); color:var(--error); font-size:.8rem; line-height:1.5; }
+  .wa-qr-stage { display:flex; align-items:center; justify-content:center; min-height:300px; background:var(--bg); border:1px dashed var(--border); border-radius:var(--radius-md); margin:14px 0; padding:16px; }
+  .wa-qr-stage img { display:none; width:min(280px,100%); height:auto; border-radius:8px; background:#fff; padding:8px; }
+  .wa-qr-placeholder { color:var(--fg-muted); text-align:center; font-size:.9rem; line-height:1.6; }
+  .wa-qr-placeholder .big { font-size:2rem; display:block; margin-bottom:8px; }
+  .wa-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .wa-phone-form { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .wa-phone-fields { display:flex; gap:8px; flex:1 1 220px; min-width:0; }
+  .wa-phone-form input { flex:1; min-width:0; }
+  .wa-phone-fields .wa-country-code { flex:0 0 74px; width:74px; text-align:center; font-weight:600; }
+  .wa-phone-form button { flex:0 0 auto; }
+  .wa-code-box { display:none; margin-top:14px; padding:14px; border:1px solid var(--accent-border); border-radius:var(--radius-md); background:var(--accent-bg); }
+  .wa-code { font-size:1.8rem; letter-spacing:.18em; font-weight:800; color:var(--accent); font-family:var(--font-mono); }
+  .wa-code-hint { color:var(--fg-muted); font-size:.78rem; line-height:1.5; margin-top:6px; }
+  .wa-remote-note { margin-top:16px; color:var(--fg-muted); font-size:.78rem; line-height:1.5; }
+  .wa-error { color:var(--error); font-size:.82rem; margin-top:10px; min-height:1.2em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wa-connect-wrap" id="whatsapp-connect-page" data-user-id="{{ user_id }}" data-status="{{ whatsapp_status }}">
+  <header class="wa-connect-header">
+    <div>
+      <h1>WhatsApp Bağlantısı</h1>
+      <p>EMOG'u kendi WhatsApp hesabınla bağla. QR okutabilir veya telefon numaranla bağlantı kodu alabilirsin.</p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/chat/">EMOG'a dön</a>
+  </header>
+
+  <div class="wa-connect-grid">
+    <section class="wa-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h2>QR ile Bağlan</h2>
+          <p class="muted">WhatsApp → Bağlı Cihazlar → Cihaz Bağla ekranından QR'ı okut.</p>
+        </div>
+        <div class="wa-status"><span id="wa-status-dot" class="wa-dot waiting"></span><span id="wa-status-text">Kontrol ediliyor...</span></div>
+      </div>
+
+      <div id="wa-qr-stage" class="wa-qr-stage">
+        <div id="wa-qr-placeholder" class="wa-qr-placeholder">
+          <span class="big">📱</span>
+          QR kodunu görmek için aşağıdaki butona bas.
+        </div>
+        <img id="wa-qr-image" alt="WhatsApp QR">
+      </div>
+
+      <div class="wa-actions">
+        <button id="wa-start-qr" class="btn btn-primary">QR Kodunu Oluştur</button>
+        <button id="wa-refresh-qr" class="btn btn-secondary">QR'ı Yenile</button>
+        <button id="wa-disconnect" class="btn btn-ghost" style="display:none;">Bağlantıyı Kes</button>
+      </div>
+      <div id="wa-error" class="wa-error"></div>
+    </section>
+
+    <aside style="display:flex;flex-direction:column;gap:16px;">
+      <section class="wa-panel">
+        <h2>Telefon Numarasıyla Bağlan</h2>
+        <p class="muted">Ülke kodu ayrı kutuda hazır gelir. Numaranı gir; WhatsApp'ta "Bağlı Cihazlar" bölümüne yazacağın kodu al.</p>
+        <form id="wa-pair-form" class="wa-phone-form">
+          <div class="wa-phone-fields">
+            <input id="wa-country-code" class="form-input wa-country-code" type="tel" inputmode="tel" value="+90" aria-label="Ülke kodu" autocomplete="tel-country-code" maxlength="5">
+            <input id="wa-phone" class="form-input" type="tel" inputmode="tel" placeholder="5xx xxx xx xx" aria-label="Telefon numarası" autocomplete="tel">
+          </div>
+          <button id="wa-get-code" class="btn btn-primary" type="submit">Kod Al</button>
+        </form>
+        <div id="wa-code-box" class="wa-code-box">
+          <div style="font-size:.78rem;color:var(--fg-muted);">Bağlantı kodun</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div id="wa-pair-code" class="wa-code">--------</div>
+            <button id="wa-copy-code" class="btn btn-ghost btn-sm" type="button" style="display:none;">Kopyala</button>
+          </div>
+          <div class="wa-code-hint">Telefonunda WhatsApp → Ayarlar → Bağlı Cihazlar → Cihaz Bağla → Telefon numarasıyla bağlan yolunu aç ve bu kodu gir.</div>
+        </div>
+      </section>
+
+      <section class="wa-panel">
+        <h2>Oturum</h2>
+        <p class="muted" id="wa-session-text">Henüz bağlı bir WhatsApp oturumu yok.</p>
+        <div id="wa-lost-notice" class="wa-lost-notice"></div>
+        <div class="wa-remote-note">
+          Bağlandıktan sonra <strong>Kendine mesaj</strong> sohbetinden <code>durum</code>, <code>projeler</code>, <code>yardım</code> yazarak EMOG'u uzaktan yönetebilirsin.
+        </div>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const page = document.getElementById('whatsapp-connect-page');
+  if (!page) return;
+  const statusDot = document.getElementById('wa-status-dot');
+  const statusText = document.getElementById('wa-status-text');
+  const qrImage = document.getElementById('wa-qr-image');
+  const qrPlaceholder = document.getElementById('wa-qr-placeholder');
+  const errorEl = document.getElementById('wa-error');
+  const codeBox = document.getElementById('wa-code-box');
+  const codeEl = document.getElementById('wa-pair-code');
+  const copyBtn = document.getElementById('wa-copy-code');
+  const disconnectBtn = document.getElementById('wa-disconnect');
+  const sessionText = document.getElementById('wa-session-text');
+  const lostNotice = document.getElementById('wa-lost-notice');
+  const countryCodeInput = document.getElementById('wa-country-code');
+  const phoneInput = document.getElementById('wa-phone');
+  let pollTimer = null;
+
+  async function readJson(response) {
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      if (data && typeof data === 'object') return data;
+    } catch (e) {
+      // JSON değil (ör. HTML hata sayfası); aşağıda okunabilir hata üretilir.
+    }
+    const clean = String(text || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    return {
+      error: clean
+        ? 'Sunucu hatası (HTTP ' + response.status + '): ' + clean.slice(0, 160)
+        : 'Sunucu hatası (HTTP ' + response.status + ')'
+    };
+  }
+
+  function buildPhoneNumber() {
+    const code = String(countryCodeInput.value || '+90').trim();
+    const raw = String(phoneInput.value || '').trim();
+    if (!raw) return '';
+    const codeDigits = code.replace(/\D/g, '');
+    if (raw.startsWith('+')) return '+' + raw.replace(/\D/g, '');
+    let digits = raw.replace(/\D/g, '');
+    // Numara ülke koduyla birlikte yazıldıysa kodu iki kez ekleme.
+    if (codeDigits && digits.startsWith(codeDigits) && digits.length > codeDigits.length + 6) {
+      return '+' + digits;
+    }
+    digits = digits.replace(/^0+/, '');
+    return codeDigits ? '+' + codeDigits + digits : digits;
+  }
+
+  const labels = {
+    connected: 'Bağlı', initializing: 'Başlatılıyor...', qr_ready: 'QR hazır',
+    pairing_code: 'Kod bekleniyor', authenticated: 'Doğrulanıyor...',
+    disconnected: 'Bağlantı kesildi', auth_failed: 'Doğrulama başarısız',
+    not_initialized: 'Başlatılmadı'
+  };
+
+  function setStatus(data) {
+    const status = data.status || 'not_initialized';
+    const connected = !!data.connected;
+    statusText.textContent = labels[status] || status;
+    statusDot.className = 'wa-dot ' + (connected ? 'connected' : (data.hasQr || data.pairingCode ? 'waiting' : 'lost'));
+    // "Bağlantıyı Kes" yalnızca gerçekten bağlıyken görünür. QR/pairing
+    // aşamalarında oturum daha kurulmamıştır; butonu göstermek kullanıcıyı
+    // "bağlıymışım" sanısına sokar.
+    disconnectBtn.style.display = connected ? 'inline-flex' : 'none';
+
+    if (connected && (data.phone || data.name)) {
+      sessionText.textContent = 'Bağlı hesap: ' + (data.name || data.phone);
+      sessionText.classList.remove('lost');
+      lostNotice.style.display = 'none';
+      codeBox.style.display = 'none';
+      copyBtn.style.display = 'none';
+      return;
+    }
+    if (!connected && data.message) {
+      // Kopuk bağlantı: eski hesap adı gösterilmez, net uyarı verilir.
+      sessionText.textContent = data.message;
+      sessionText.classList.add('lost');
+      lostNotice.textContent = data.message;
+      lostNotice.style.display = 'block';
+      return;
+    }
+    if (data.phone || data.name) {
+      // Eski sürümden kalan kimlik bilgisine karşı güvenli davran.
+      sessionText.textContent = 'Bağlantı koptu — yeniden bağlanın';
+      sessionText.classList.add('lost');
+      lostNotice.textContent = sessionText.textContent;
+      lostNotice.style.display = 'block';
+      return;
+    }
+    sessionText.classList.remove('lost');
+    lostNotice.style.display = 'none';
+    if (status === 'not_initialized') {
+      sessionText.textContent = 'Henüz bağlı bir WhatsApp oturumu yok.';
+    } else {
+      sessionText.textContent = 'Oturum: ' + (labels[status] || status);
+    }
+  }
+
+  async function loadQR() {
+    const response = await fetch('/api/whatsapp/qr/', { credentials: 'include' });
+    const data = await readJson(response);
+    if (!response.ok || !data.qr) return;
+    qrImage.src = String(data.qr).startsWith('data:')
+      ? data.qr
+      : 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(data.qr);
+    qrImage.style.display = 'block';
+    if (qrPlaceholder) qrPlaceholder.style.display = 'none';
+  }
+
+  async function poll() {
+    try {
+      const response = await fetch('/api/whatsapp/status/', { credentials: 'include' });
+      const data = await readJson(response);
+      if (!response.ok) return;
+      setStatus(data);
+      if (data.connected) {
+        if (pollTimer) clearInterval(pollTimer);
+        window.location.replace('/whatsapp/');
+        return;
+      }
+      if (data.hasQr) await loadQR();
+      if (data.pairingCode) {
+        codeEl.textContent = data.pairingCode;
+        codeBox.style.display = 'block';
+        copyBtn.style.display = 'inline-flex';
+      }
+    } catch (e) {
+      // Servis geçici olarak kapalı olabilir.
+    }
+  }
+
+  async function startQR() {
+    errorEl.textContent = '';
+    statusText.textContent = 'Başlatılıyor...';
+    try {
+      const response = await fetch('/api/whatsapp/init/', {
+        method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'},
+      });
+      const data = await readJson(response);
+      if (!response.ok || data.success === false) {
+        errorEl.textContent = data.error || 'WhatsApp başlatılamadı. Servisin çalıştığını kontrol et.';
+        return;
+      }
+      await poll();
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(poll, 2000);
+    } catch (e) {
+      errorEl.textContent = 'Sunucuya ulaşılamıyor. Django ve WhatsApp servisinin çalıştığını kontrol et.';
+    }
+  }
+
+  async function getPairingCode(event) {
+    event.preventDefault();
+    errorEl.textContent = '';
+    const phone = buildPhoneNumber();
+    if (!phone || phone === '+') {
+      errorEl.textContent = 'Lütfen telefon numaranı gir.';
+      return;
+    }
+    const button = document.getElementById('wa-get-code');
+    const old = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Kod alınıyor...';
+    try {
+      const response = await fetch('/api/whatsapp/pair/', {
+        method: 'POST', credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          phone: phone,
+          country_code: String(countryCodeInput.value || '+90').trim() || '+90',
+        }),
+      });
+      const data = await readJson(response);
+      if (!response.ok || data.success === false) {
+        errorEl.textContent = data.error || 'Kod alınamadı.';
+        return;
+      }
+      if (data.code) {
+        codeEl.textContent = data.code;
+        codeBox.style.display = 'block';
+        copyBtn.style.display = 'inline-flex';
+        if (!pollTimer) pollTimer = setInterval(poll, 2000);
+      }
+    } catch (e) {
+      errorEl.textContent = 'Sunucuya ulaşılamıyor. Django ve WhatsApp servisinin çalıştığını kontrol et.';
+    } finally {
+      button.disabled = false;
+      button.textContent = old;
+    }
+  }
+
+  copyBtn?.addEventListener('click', async () => {
+    const code = (codeEl.textContent || '').trim();
+    if (!code || code === '--------') return;
+    const done = () => {
+      copyBtn.textContent = 'Kopyalandı ✓';
+      setTimeout(() => { copyBtn.textContent = 'Kopyala'; }, 2000);
+    };
+    try {
+      await navigator.clipboard.writeText(code);
+      done();
+    } catch (e) {
+      // HTTPS dışında/izin verilmezse seçim + execCommand yedeği.
+      const range = document.createRange();
+      range.selectNodeContents(codeEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      try { document.execCommand('copy'); done(); }
+      catch (err) { copyBtn.textContent = 'Kodu seçip kopyala'; }
+    }
+  });
+
+  document.getElementById('wa-start-qr').addEventListener('click', startQR);
+  document.getElementById('wa-refresh-qr').addEventListener('click', loadQR);
+  document.getElementById('wa-pair-form').addEventListener('submit', getPairingCode);
+  countryCodeInput.addEventListener('blur', () => {
+    const digits = String(countryCodeInput.value || '').replace(/\D/g, '');
+    countryCodeInput.value = '+' + (digits || '90');
+  });
+  disconnectBtn.addEventListener('click', async () => {
+    if (!confirm('WhatsApp bağlantısını kesmek istiyor musun?')) return;
+    await fetch('/api/whatsapp/disconnect/', { method: 'POST', credentials: 'include', headers: {'Content-Type': 'application/json'} });
+    window.location.reload();
+  });
+
+  poll();
+  if (['initializing', 'qr_ready', 'pairing_code'].includes(page.dataset.status)) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(poll, 2000);
+  }
+})();
+</script>
+{% endblock %}
+

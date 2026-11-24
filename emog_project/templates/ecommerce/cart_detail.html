@@ -1,0 +1,40 @@
+{% extends "ecommerce/base.html" %}
+{% block title %}Sepet - EMOG Store{% endblock %}
+
+{% block content %}
+<h2>Sepetim</h2>
+
+{% if cart_items %}
+    <div class="cart-items">
+        {% for item in cart_items %}
+        <div class="cart-item">
+            <img src="{{ item.product.images.filter(is_primary=True).first.image.url }}" alt="{{ item.product.name }}" style="width:80px; height:80px; object-fit:cover; margin-right:15px; border-radius:4px;">
+            <div class="details">
+                <strong>{{ item.product.name }}</strong>
+                <span>₺{{ item.price_at_addition }}</span>
+                <input type="number" min="1" value="{{ item.quantity }}" style="width:50px; display:inline-block;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="removeCartItem({{ item.id })}">Kaldır</button>
+            </div>
+            <span>Toplam: ₺{{ item.price_at_addition * item.quantity }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="cart-summary">
+        <h3>Özet</h3>
+        <p>Toplam ürün: {{ cart_items|sum:"quantity" }}</p>
+        <p>Toplam fiyat: ₺{{ total }}</p>
+        <p>KDV (%18): ₺{{ tax }}</p>
+        <p><strong>Genel Toplam: ₺{{ grand_total }}</strong></p>
+        <hr>
+        <a href="{% url 'ecommerce:checkout' %}" class="btn btn-primary">Ödeme Yap</a>
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        Sepetiniz boş. Ürünleri sepete eklemek için ürün sayfalarınızda "Sepete Ekle" butonlarını kullanın.
+    </div>
+    <a href="{% url 'ecommerce:product_list' %}" class="btn">Alışverişe Başla</a>
+{% endif %}
+
+<a href="{% url 'ecommerce:product_list' %}" class="btn btn-secondary">Devamlı Alışveriş</a>
+</div>
